@@ -9,7 +9,7 @@ Welcome to Tender-POC, a proof of concept for an efficient tender management sys
 
 ## 🚀 Getting Started
 
-1. Clone the repo: `git clone https://github.com/your-username/tender-poc.git`
+1. Clone the repo: `git clone https://github.com/shubham-alemeno/tender-poc.git`
 2. Navigate to the project: `cd tender-poc`
 3. Install dependencies: `pip install -r requirements.txt`
 4. Run the main script: `python main.py`
