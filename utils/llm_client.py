@@ -1,11 +1,12 @@
 import os
 from anthropic import AnthropicVertex
-
+from dotenv import load_dotenv,find_dotenv
 class LLMClient:
-    def __init__(self):
-        self.project_id = os.getenv("PROJECT_ID")
-        self.location = os.getenv("LOCATION")
-        self.model = os.getenv("MODEL")
+    def __init__(self,project_id,location,model):
+        self.project_id = project_id
+        self.location = location
+        self.model = model
+        print(self.project_id,self.location)
         self.client = AnthropicVertex(region=self.location, project_id=self.project_id)
 
     def call_llm(self, system_prompt, user_prompt, max_tokens=1024):

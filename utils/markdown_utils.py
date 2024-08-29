@@ -32,160 +32,189 @@ from marker.images.save import images_to_dict
 from marker.models import load_all_models
 from typing import List, Dict, Tuple, Optional
 from marker.settings import settings
+from langchain.text_splitter import MarkdownHeaderTextSplitter
 
 
+class PDFMarkdown:
+
+    def __init__(self,pdf_path=None,file_id=None):
+        self.pdf_path=pdf_path
+        self.markdown_text=None
+        self.markdown_file_path=None
+        self.file_id=file_id
 
 
-def pdf_to_markdown(pdf_path,file_id):
-    """Convert PDF to Markdown using marker-pdf library."""
-    model_lst=load_all_models()
-    full_text,doc_images,out_meta=convert_single_pdf(pdf_path,model_lst=model_lst,batch_multiplier=3)
-    output_path=f"./{file_id}.md"
-    save_markdown_to_file(full_text,output_path)
+    def pdf_to_markdown(self):
+        """Convert PDF to Markdown using marker-pdf library."""
+        model_lst=load_all_models()
+        full_text,doc_images,out_meta=self.convert_single_pdf(fname=self.pdf_path,model_lst=model_lst,batch_multiplier=3)
+        self.markdown_text=full_text
+        return self.markdown_text
 
 
-def save_markdown_to_file(markdown_text, file_path):
-    with open(file_path, 'w', encoding='utf-8') as file:
-        file.write(markdown_text)
+    def save_markdown_to_file(self,file_path,output_name):
+        output_path=f"{file_path}/{output_name}.md"
+        self.markdown_file_path=output_path
+        with open(file_path, 'w', encoding='utf-8') as file:
+            file.write(self.markdown_text)
+        return self.markdown_file_path
 
 
-def convert_single_pdf(
-        fname: str,
-        model_lst: List,
-        max_pages: int = None,
-        start_page: int = None,
-        metadata: Optional[Dict] = None,
-        langs: Optional[List[str]] = None,
-        batch_multiplier: int = 1,
-        ocr_all_pages: bool = False
-) -> Tuple[str, Dict[str, Image.Image], Dict]:
-    ocr_all_pages = ocr_all_pages or settings.OCR_ALL_PAGES
+    def split_markdown_by_headers(self):
+        if self.markdown_text is None:
+            raise Exception("please convert to markdown first using pdf_to_markdown()")
 
-    if metadata:
-        langs = metadata.get("languages", langs)
+        headers_to_split_on = [
+                    ("#", "Header 1"),
+                    ("##", "Header 2"),
+                    ("###", "Header 3"),
+                ]
+        markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+        md_header_splits = markdown_splitter.split_text(self.markdown_text)
+        return md_header_splits
 
-    langs = replace_langs_with_codes(langs)
-    validate_langs(langs)
 
-    # Find the filetype
-    filetype = find_filetype(fname)
+    def get_file_id(self):
+        return self.file_id
 
-    # Setup output metadata
-    out_meta = {
-        "languages": langs,
-        "filetype": filetype,
-    }
+        
+    def convert_single_pdf(self,
+            fname: str,
+            model_lst: List,
+            max_pages: int = None,
+            start_page: int = None,
+            metadata: Optional[Dict] = None,
+            langs: Optional[List[str]] = None,
+            batch_multiplier: int = 1,
+            ocr_all_pages: bool = False
+    ) -> Tuple[str, Dict[str, Image.Image], Dict]:
+        ocr_all_pages = ocr_all_pages or settings.OCR_ALL_PAGES
 
-    if filetype == "other": # We can't process this file
-        return "", {}, out_meta
+        if metadata:
+            langs = metadata.get("languages", langs)
 
-    # Get initial text blocks from the pdf
-    doc = pdfium.PdfDocument(fname)
-    pages, toc = get_text_blocks(
-        doc,
-        fname,
-        max_pages=max_pages,
-        start_page=start_page
-    )
-    out_meta.update({
-        "toc": toc,
-        "pages": len(pages),
-    })
+        langs = replace_langs_with_codes(langs)
+        validate_langs(langs)
 
-    # Trim pages from doc to align with start page
-    if start_page:
-        for page_idx in range(start_page):
-            doc.del_page(0)
+        # Find the filetype
+        filetype = find_filetype(fname)
 
-    # Unpack models from list
-    texify_model, layout_model, order_model, edit_model, detection_model, ocr_model = model_lst
+        # Setup output metadata
+        out_meta = {
+            "languages": langs,
+            "filetype": filetype,
+        }
 
-    # Identify text lines on pages
-    surya_detection(doc, pages, detection_model, batch_multiplier=batch_multiplier)
-    flush_cuda_memory()
+        if filetype == "other": # We can't process this file
+            return "", {}, out_meta
 
-    # OCR pages as needed
-    pages, ocr_stats = run_ocr(doc, pages, langs, ocr_model, batch_multiplier=batch_multiplier, ocr_all_pages=ocr_all_pages)
-    flush_cuda_memory()
+        # Get initial text blocks from the pdf
+        doc = pdfium.PdfDocument(fname)
+        pages, toc = get_text_blocks(
+            doc,
+            fname,
+            max_pages=max_pages,
+            start_page=start_page
+        )
+        out_meta.update({
+            "toc": toc,
+            "pages": len(pages),
+        })
 
-    out_meta["ocr_stats"] = ocr_stats
-    if len([b for p in pages for b in p.blocks]) == 0:
-        print(f"Could not extract any text blocks for {fname}")
-        return "", {}, out_meta
+        # Trim pages from doc to align with start page
+        if start_page:
+            for page_idx in range(start_page):
+                doc.del_page(0)
 
-    surya_layout(doc, pages, layout_model, batch_multiplier=batch_multiplier)
-    flush_cuda_memory()
+        # Unpack models from list
+        texify_model, layout_model, order_model, edit_model, detection_model, ocr_model = model_lst
 
-    # Find headers and footers
-    bad_span_ids = filter_header_footer(pages)
-    out_meta["block_stats"] = {"header_footer": len(bad_span_ids)}
+        # Identify text lines on pages
+        surya_detection(doc, pages, detection_model, batch_multiplier=batch_multiplier)
+        flush_cuda_memory()
 
-    # Add block types in
-    annotate_block_types(pages)
+        # OCR pages as needed
+        pages, ocr_stats = run_ocr(doc, pages, langs, ocr_model, batch_multiplier=batch_multiplier, ocr_all_pages=ocr_all_pages)
+        flush_cuda_memory()
 
-    # Dump debug data if flags are set
-    dump_bbox_debug_data(doc, fname, pages)
+        out_meta["ocr_stats"] = ocr_stats
+        if len([b for p in pages for b in p.blocks]) == 0:
+            print(f"Could not extract any text blocks for {fname}")
+            return "", {}, out_meta
 
-    # Find reading order for blocks
-    # Sort blocks by reading order
-    surya_order(doc, pages, order_model, batch_multiplier=batch_multiplier)
-    sort_blocks_in_reading_order(pages)
-    flush_cuda_memory()
+        surya_layout(doc, pages, layout_model, batch_multiplier=batch_multiplier)
+        flush_cuda_memory()
 
-    # Fix code blocks
-    code_block_count = identify_code_blocks(pages)
-    out_meta["block_stats"]["code"] = code_block_count
-    indent_blocks(pages)
+        # Find headers and footers
+        bad_span_ids = filter_header_footer(pages)
+        out_meta["block_stats"] = {"header_footer": len(bad_span_ids)}
 
-    # Fix table blocks
-    table_count = format_tables(pages)
-    out_meta["block_stats"]["table"] = table_count
+        # Add block types in
+        annotate_block_types(pages)
 
-    for page in pages:
-        for block in page.blocks:
-            block.filter_spans(bad_span_ids)
-            block.filter_bad_span_types()
+        # Dump debug data if flags are set
+        dump_bbox_debug_data(doc, fname, pages)
 
-    filtered, eq_stats = replace_equations(
-        doc,
-        pages,
-        texify_model,
-        batch_multiplier=batch_multiplier
-    )
-    flush_cuda_memory()
-    out_meta["block_stats"]["equations"] = eq_stats
+        # Find reading order for blocks
+        # Sort blocks by reading order
+        surya_order(doc, pages, order_model, batch_multiplier=batch_multiplier)
+        sort_blocks_in_reading_order(pages)
+        flush_cuda_memory()
 
-    # Extract images and figures
-    if settings.EXTRACT_IMAGES:
-        extract_images(doc, pages)
+        # Fix code blocks
+        code_block_count = identify_code_blocks(pages)
+        out_meta["block_stats"]["code"] = code_block_count
+        indent_blocks(pages)
 
-    # Split out headers
-    split_heading_blocks(pages)
-    find_bold_italic(pages)
+        # Fix table blocks
+        table_count = format_tables(pages)
+        out_meta["block_stats"]["table"] = table_count
 
-    # Copy to avoid changing original data
-    merged_lines = merge_spans(filtered)
-    text_blocks = merge_lines(merged_lines)
-    text_blocks = filter_common_titles(text_blocks)
-    full_text = get_full_text(text_blocks)
+        for page in pages:
+            for block in page.blocks:
+                block.filter_spans(bad_span_ids)
+                block.filter_bad_span_types()
 
-    # Handle empty blocks being joined
-    full_text = cleanup_text(full_text)
+        filtered, eq_stats = replace_equations(
+            doc,
+            pages,
+            texify_model,
+            batch_multiplier=batch_multiplier
+        )
+        flush_cuda_memory()
+        out_meta["block_stats"]["equations"] = eq_stats
 
-    # Replace bullet characters with a -
-    full_text = replace_bullets(full_text)
+        # Extract images and figures
+        if settings.EXTRACT_IMAGES:
+            extract_images(doc, pages)
 
-    # Postprocess text with editor model
-    full_text, edit_stats = edit_full_text(
-        full_text,
-        edit_model,
-        batch_multiplier=batch_multiplier
-    )
-    flush_cuda_memory()
-    out_meta["postprocess_stats"] = {"edit": edit_stats}
-    doc_images = images_to_dict(pages)
+        # Split out headers
+        split_heading_blocks(pages)
+        find_bold_italic(pages)
 
-    return full_text, doc_images, out_meta
+        # Copy to avoid changing original data
+        merged_lines = merge_spans(filtered)
+        text_blocks = merge_lines(merged_lines)
+        text_blocks = filter_common_titles(text_blocks)
+        full_text = get_full_text(text_blocks)
+
+        # Handle empty blocks being joined
+        full_text = cleanup_text(full_text)
+
+        # Replace bullet characters with a -
+        full_text = replace_bullets(full_text)
+
+        # Postprocess text with editor model
+        full_text, edit_stats = edit_full_text(
+            full_text,
+            edit_model,
+            batch_multiplier=batch_multiplier
+        )
+        flush_cuda_memory()
+        out_meta["postprocess_stats"] = {"edit": edit_stats}
+        doc_images = images_to_dict(pages)
+
+        return full_text, doc_images, out_meta
 
 
 
