@@ -1,3 +1,5 @@
 output/
+venv
 .env
 docs/
+*__pycache__/
