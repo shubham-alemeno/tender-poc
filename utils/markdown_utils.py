@@ -55,7 +55,7 @@ class PDFMarkdown:
     def save_markdown_to_file(self,file_path,output_name):
         output_path=f"{file_path}/{output_name}.md"
         self.markdown_file_path=output_path
-        with open(file_path, 'w', encoding='utf-8') as file:
+        with open(output_path, 'w', encoding='utf-8') as file:
             file.write(self.markdown_text)
         return self.markdown_file_path
 

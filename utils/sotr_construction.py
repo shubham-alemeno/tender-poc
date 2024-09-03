@@ -1,6 +1,6 @@
 from utils.markdown_utils import PDFMarkdown
 from utils.llm_client import LLMClient
-
+import pandas as pd
 
 
 class SOTRMarkdown(PDFMarkdown):
@@ -8,6 +8,7 @@ class SOTRMarkdown(PDFMarkdown):
     def __init__(self,llm_client):
         self.sotr_matrix=[]
         self.llm_client=llm_client
+        self.df=None
 
     def load_from_md(self,file_path,file_id):
         self.file_id=file_id
@@ -21,6 +22,16 @@ class SOTRMarkdown(PDFMarkdown):
          self.pdf_path=file_path
          self.pdf_to_markdown()
          return self.markdown_text
+
+
+    def post_process_response(self,split_text):
+        headers=["Sr. No.","Clause","Clause Reference"]
+        cleaned_csv_data=[]
+        for i,row in enumerate(split_text[1:]):
+            items=row.split("|")
+            cleaned_csv_data.append([i,items[1].replace('"',''),items[2]])
+        df=pd.DataFrame(columns=headers,data=cleaned_csv_data)
+        return df
 
     def get_matrix_points(self):
         points=['Sr. No.,Requirement(clause content),Source Reference(reference number of clause in the document)']
@@ -98,7 +109,8 @@ class SOTRMarkdown(PDFMarkdown):
                 points.extend(split_points[1:])
                 print(f"completed {i+1}/{len(cleaned_text_splits)}")
             self.sotr_matrix=points
-            return points
+            self.df=self.post_process_response(points)
+            return self.df,points
 
 
         else:

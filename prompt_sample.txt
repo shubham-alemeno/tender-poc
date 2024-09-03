@@ -1,0 +1,8 @@
+Given a CSV file extracted text containing compliance clauses, where the columns are "Sr No.", "Clause", and "Clause Reference".
+Process each row in the CSV file and generate a question for each clause.
+The generated questions should be phrased to check compliance with the clause. For example:
+If the clause starts with "Compliance with...", the question should be "Does the system comply with...?"
+If the clause describes a requirement, the question should be "Does the system meet the requirement of...?"
+If the clause describes a feature or characteristic, the question should be "Does the system have...?" or "Is the system capable of...?"
+Handle special cases where the clause might be a continuation of a previous clause or contain multiple requirements.
+Output a list of json objects, where each item represents a clause-question pair for compliance checking. csv file content 
