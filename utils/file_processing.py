@@ -1,5 +1,5 @@
 import os
-from utils.markdown_utils import pdf_to_markdown
+from utils.markdown_utils import PDFMarkdown
 
 def get_file_path(is_pdf: bool = False) -> str:
     """Prompt user for file path and validate its existence."""
@@ -16,12 +16,11 @@ def process_file(file_path: str, is_pdf: bool) -> str:
     print(f"Processing file: {file_name}")
     
     if is_pdf:
-        markdown_file = f"{os.path.splitext(file_name)[0]}.md"
-        pdf_to_markdown(file_path, markdown_file)
-        file_path = markdown_file
-    
-    with open(file_path, 'r', encoding='utf-8') as file:
-        content = file.read()
+        pdf_markdown = PDFMarkdown(file_path)
+        content = pdf_markdown.pdf_to_markdown()
+    else:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            content = file.read()
     
     print("File content preview:")
     print("\n".join(content.split("\n")[:3]))
