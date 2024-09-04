@@ -6,6 +6,7 @@ import pandas as pd
 class SOTRMarkdown(PDFMarkdown):
 
     def __init__(self,llm_client):
+        self.markdown_sections=[]
         self.sotr_matrix=[]
         self.llm_client=llm_client
         self.df=None
@@ -37,10 +38,18 @@ class SOTRMarkdown(PDFMarkdown):
         points=['Sr. No.,Requirement(clause content),Source Reference(reference number of clause in the document)']
         if(self.markdown_text):
             markdown_text_splits=self.split_markdown_by_headers()
-            cleaned_text_splits=[x.page_content for x in markdown_text_splits if x.page_content.strip()]
-
+            print(markdown_text_splits)
+            cleaned_text_splits=[]
+            for point in markdown_text_splits:
+                section_header=point.metadata["Header 2"]
+                section_no=section_header.split(" ")[0]
+                if point.page_content.strip():
+                    cleaned_text_splits.append({"section":section_no,"content":point.page_content})
+                
+            self.markdown_sections=cleaned_text_splits
+            print(cleaned_text_splits)
             system_prompt="""
-                    Given a part of a specific document in markdown format containing compliance requirements, create a comprehensive compliance matrix following these steps:
+                    Given a part of a specific document in markdown format containing compliance requirements and the section number of the part, create a comprehensive compliance matrix following these steps:
 
                         1. Document Analysis:
                         - Thoroughly review the provided document.
@@ -51,6 +60,8 @@ class SOTRMarkdown(PDFMarkdown):
                         - Extract each individual requirement or standard from the document.
                         - Maintain the original wording of each requirement.
                         - Preserve any numbering or referencing system used in the document.
+                        - prefix the section number to the clause reference.
+                        - if there is a table , use the same clause reference for all rows.
 
                         3. Identify Key Information:
                         - For each requirement, identify key pieces of information such as:
@@ -61,7 +72,8 @@ class SOTRMarkdown(PDFMarkdown):
                             - Responsible parties or roles mentioned
                             - Any associated penalties or consequences for non-compliance
                         - Note any other recurring or important information types specific to this document
-
+                        - Do not change the structure or content of the clause , just add it verbatim as a compliance clause 
+                        
                         4. Column Definition:
                         - Use the following fixed columns for the matrix:
                             a. Sr. No.
@@ -99,8 +111,10 @@ class SOTRMarkdown(PDFMarkdown):
             """
             for i,text_block in enumerate(cleaned_text_splits):
                 user_prompt=f"""
+                section number:
+                {text_block["section"]}
                 markdown text:
-                {text_block}
+                {text_block["content"]}
                 """
                 response=self.llm_client.call_llm(system_prompt=system_prompt,user_prompt=user_prompt,max_tokens=8192)
                 if response is None:
