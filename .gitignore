@@ -3,6 +3,4 @@ output/
 venv
 .env
 docs/
-*__pycache__/
-pyproject.toml
 poetry.lock
