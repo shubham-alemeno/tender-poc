@@ -15,6 +15,7 @@ langchain = "^0.2.15"
 anthropic = {extras = ["vertex"], version = "^0.34.2"}
 python-dotenv = "^1.0.1"
 google-cloud-aiplatform = "^1.65.0"
+xlsxwriter = "^3.2.0"
 
 
 [build-system]

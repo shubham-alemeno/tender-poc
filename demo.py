@@ -43,29 +43,43 @@ def sotr_processing_tab(llm_client):
             
             my_bar.progress(50, text=progress_text)
             
-            df, split_text = sotr.get_matrix_points()
+            st.write("Before get_matrix_points")
+            try:
+                df, split_text = sotr.get_matrix_points()
+                if df.empty:
+                    st.warning("No data was extracted from the document. Please check the content and try again.")
+                else:
+                    my_bar.progress(75, text=progress_text)
+                    
+                    st.write(f"DataFrame shape: {df.shape}")
+                    st.dataframe(df)
+                    
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                        df.to_excel(writer, index=False, sheet_name='Sheet1')
+                    excel_data = output.getvalue()
+                    
+                    st.download_button(
+                        label="📥 Download Current Result",
+                        data=excel_data,
+                        file_name="sotr_matrix.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                    
+                    my_bar.progress(100, text="Processing complete!")
+                    
+                    st.success("SOTR document processed successfully!")
+            except Exception as e:
+                st.error(f"Error in get_matrix_points: {str(e)}")
+                st.write(f"Exception type: {type(e).__name__}")
+                st.write(f"Exception details: {e.__dict__}")
+                st.warning("Processing completed with errors. Some sections may have been skipped.")
+            st.write("After get_matrix_points")
             
-            my_bar.progress(75, text=progress_text)
-            
-            st.dataframe(df)
-            
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df.to_excel(writer, index=False, sheet_name='Sheet1')
-            excel_data = output.getvalue()
-            
-            st.download_button(
-                label="📥 Download Current Result",
-                data=excel_data,
-                file_name="sotr_matrix.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-            
-            my_bar.progress(100, text="Processing complete!")
-            
-            st.success("SOTR document processed successfully!")
         except Exception as e:
             st.error(f"Error processing SOTR document: {str(e)}")
+            st.write(f"Exception type: {type(e).__name__}")
+            st.write(f"Exception details: {e.__dict__}")
 
 def tender_qa_tab(llm_client):
     st.subheader("Tender Q&A")
