@@ -4,3 +4,4 @@ venv
 .env
 docs/
 poetry.lock
+key.json
