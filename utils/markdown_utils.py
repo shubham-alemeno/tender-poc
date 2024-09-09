@@ -33,6 +33,12 @@ from marker.models import load_all_models
 from typing import List, Dict, Tuple, Optional
 from marker.settings import settings
 from langchain.text_splitter import MarkdownHeaderTextSplitter
+from functools import lru_cache
+import tempfile
+
+@lru_cache(maxsize=1)
+def get_marker_models():
+    return load_all_models()
 
 
 class PDFMarkdown:
@@ -44,12 +50,19 @@ class PDFMarkdown:
         self.file_id=file_id
 
 
-    def pdf_to_markdown(self):
-        """Convert PDF to Markdown using marker-pdf library."""
-        model_lst=load_all_models()
-        full_text,doc_images,out_meta=self.convert_single_pdf(fname=self.pdf_path,model_lst=model_lst,batch_multiplier=3)
-        self.markdown_text=full_text
-        return self.markdown_text
+    def pdf_to_markdown(self, file_content):
+        """Convert PDF content to Markdown using marker-pdf library."""
+        model_lst = get_marker_models()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            temp_file.write(file_content)
+            temp_file_path = temp_file.name
+
+        try:
+            full_text, doc_images, out_meta = self.convert_single_pdf(fname=temp_file_path, model_lst=model_lst, batch_multiplier=3)
+            self.markdown_text = full_text
+            return self.markdown_text
+        finally:
+            os.unlink(temp_file_path)
 
 
     def save_markdown_to_file(self,file_path,output_name):

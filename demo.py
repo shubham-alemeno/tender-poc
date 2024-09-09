@@ -7,27 +7,47 @@ import os
 import tempfile
 import io
 import pandas as pd
+import gc
+from dotenv import load_dotenv
+load_dotenv()
 
 @st.cache_data
 def load_env_vars():
-    return {
-        "project_id": os.getenv("PROJECT_ID"),
-        "location": os.getenv("LOCATION"),
-        "model": os.getenv("MODEL")
-    }
+    required_vars = ["ANTHROPIC_MODEL", "ANTHROPIC_API_KEY"]
+    env_vars = {}
+    missing_vars = []
+
+    for var in required_vars:
+        value = os.getenv(var)
+        if value is None:
+            missing_vars.append(var)
+        else:
+            env_vars[var.lower()] = value
+
+    if missing_vars:
+        st.error(f"Missing environment variables: {', '.join(missing_vars)}")
+        st.info("Please set these variables in your .env file or environment.")
+        return None
+
+    return env_vars
 
 @st.cache_resource
 def get_llm_client(env_vars):
-    return LLMClient(**env_vars)
+    return LLMClient(anthropic_model=env_vars.get('anthropic_model'))
 
 def sotr_processing_tab(llm_client):
     st.subheader("SOTR Processing")
     st.write("This tab will contain the SOTR processing functionality.")
 
-    sotr_file = st.file_uploader("Upload SOTR Document", type=["pdf"])
+    file_type = st.radio("Choose file type to upload:", ("PDF", "Processed Markdown"))
+    
+    if file_type == "PDF":
+        sotr_file = st.file_uploader("Upload SOTR Document", type=["pdf"])
+    else:
+        sotr_file = st.file_uploader("Upload Processed Markdown", type=["md"])
 
     if sotr_file is not None:
-        st.write("SOTR document uploaded successfully!")
+        st.write(f"{file_type} uploaded successfully!")
 
         try:
             progress_text = "Processing SOTR document. Please wait."
@@ -39,7 +59,19 @@ def sotr_processing_tab(llm_client):
             
             my_bar.progress(25, text=progress_text)
             
-            sotr.load_from_pdf(file_content, file_id)
+            if file_type == "PDF":
+                sotr.load_from_pdf(file_content, file_id)
+                markdown_text = sotr.markdown_text
+                
+                st.download_button(
+                    label="📥 Download Processed Markdown",
+                    data=markdown_text,
+                    file_name="processed_sotr.md",
+                    mime="text/markdown"
+                )
+            else:
+                markdown_text = file_content.decode("utf-8")
+                sotr.load_from_md(markdown_text, file_id)
             
             my_bar.progress(50, text=progress_text)
             
@@ -81,50 +113,70 @@ def sotr_processing_tab(llm_client):
             st.write(f"Exception type: {type(e).__name__}")
             st.write(f"Exception details: {e.__dict__}")
 
+@st.cache_data
+def convert_pdf_to_markdown(file_content, file_name):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        tmp_file.write(file_content)
+        tmp_file_path = tmp_file.name
+
+    try:
+        tender_pdf_markdown = PDFMarkdown(pdf_path=tmp_file_path, file_id=file_name)
+        tender_in_markdown_format = tender_pdf_markdown.pdf_to_markdown()
+        return tender_in_markdown_format
+    finally:
+        tender_pdf_markdown = None
+        gc.collect()
+        import time
+        time.sleep(0.1)
+        try:
+            if os.path.exists(tmp_file_path):
+                os.unlink(tmp_file_path)
+        except Exception as e:
+            st.warning(f"Could not delete temporary file: {str(e)}")
+
 def tender_qa_tab(llm_client):
     st.subheader("Tender Q&A")
-    tender_pdf = st.file_uploader("Upload Tender Document", type=["pdf"])
+    
+    file_type = st.radio("Choose file type to upload:", ("PDF", "Processed Markdown"), key="tender_qa_file_type")
+    
+    if file_type == "PDF":
+        uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
+    else:
+        uploaded_file = st.file_uploader("Upload Processed Markdown", type=["md"], key="tender_qa_md_uploader")
 
-    if tender_pdf is not None:
-        st.write("Tender document uploaded successfully!")
-        try:
-            progress_text = "Processing tender document. Please wait."
-            my_bar = st.progress(0, text=progress_text)
-
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                tmp_file.write(tender_pdf.getvalue())
-                tmp_file_path = tmp_file.name
-
+    if uploaded_file is not None:
+        st.write(f"{file_type} uploaded successfully!")
+        
+        if file_type == "PDF":
             try:
-                tender_pdf_markdown = PDFMarkdown(pdf_path=tmp_file_path, file_id=tender_pdf.name)
-                st.write("PDF to Markdown conversion started...")
-                tender_in_markdown_format = tender_pdf_markdown.pdf_to_markdown()
-                st.write("PDF to Markdown conversion completed.")
+                progress_text = "Processing tender document. Please wait."
+                my_bar = st.progress(0, text=progress_text)
+
+                tender_in_markdown_format = convert_pdf_to_markdown(uploaded_file.getvalue(), uploaded_file.name)
+                
                 if not tender_in_markdown_format:
                     st.error("PDF to Markdown conversion failed: Empty result")
                     return
+                
+                st.download_button(
+                    label="📥 Download Processed Markdown",
+                    data=tender_in_markdown_format,
+                    file_name="processed_tender.md",
+                    mime="text/markdown"
+                )
+
+                my_bar.progress(100, text="Processing complete!")
+                st.success("Tender document processed successfully!")
             except Exception as e:
-                st.error(f"Error during PDF to Markdown conversion: {str(e)}")
-                return
-            finally:
-                tender_pdf_markdown = None
-                try:
-                    os.unlink(tmp_file_path)
-                except Exception as e:
-                    st.warning(f"Could not delete temporary file: {str(e)}")
-
-            my_bar.progress(100, text="Processing complete!")
-            st.success("Tender document processed successfully!")
-            st.write("Displaying chat container...")
-            tender_qa_chat_container(llm_client, tender_in_markdown_format)
-
-        except Exception as e:
-            st.error(f"Error processing tender document: {str(e)}")
-            st.write("Displaying chat container despite error...")
-            tender_qa_chat_container(llm_client, "Error occurred while processing the document.")
-
+                st.error(f"Error processing tender document: {str(e)}")
+                tender_in_markdown_format = "Error occurred while processing the document."
+        else:
+            tender_in_markdown_format = uploaded_file.getvalue().decode("utf-8")
+        
+        st.write("Displaying chat container...")
+        tender_qa_chat_container(llm_client, tender_in_markdown_format)
     else:
-        st.write("Please upload a tender document to start the Q&A session.")
+        st.write("Please upload a document to start the Q&A session.")
 
 def tender_qa_chat_container(llm_client, markdown_text):
     st.subheader("Tender Q&A Chat")

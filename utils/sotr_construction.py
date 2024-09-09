@@ -12,16 +12,15 @@ class SOTRMarkdown(PDFMarkdown):
         self.llm_client = llm_client
         self.df = None
 
-    def load_from_md(self, file_path, file_id):
+    def load_from_md(self, file_content, file_id):
         self.file_id = file_id
-        with open(file_path, "r") as file:
-            self.markdown_text = file.read()
+        self.markdown_text = file_content
         return self.markdown_text
 
-    def load_from_pdf(self, file_path, file_id):
+    def load_from_pdf(self, file_content, file_id):
         self.file_id = file_id    
-        self.pdf_path = file_path
-        self.pdf_to_markdown()
+        self.pdf_path = None  # or handle this differently if needed
+        self.markdown_text = self.pdf_to_markdown(file_content)
         return self.markdown_text
 
     def post_process_response(self, split_text):
