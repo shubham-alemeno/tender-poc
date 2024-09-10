@@ -58,9 +58,14 @@ def sotr_processing_tab(llm_client):
             file_id = f"sotr_{sotr_file.name}"
             sotr = SOTRMarkdown(llm_client=llm_client)
             
-            my_bar.progress(25, text=progress_text)
+            my_bar.progress(15, text=progress_text)
             
             if file_type == "PDF":
+                time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
+                estimated_pages = len(file_content) // 10000
+                ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
+                st.write(f"Estimated time to complete: {ETA_time_in_minutes:.2f} minutes")
+
                 sotr.load_from_pdf(file_content, file_id)
                 markdown_text = sotr.markdown_text
                 
@@ -95,11 +100,9 @@ def sotr_processing_tab(llm_client):
                 if df.empty:
                     st.warning("No data was extracted from the document. Please check the content and try again.")
                 else:
-                    my_bar.progress(75, text=progress_text)
-                    
-                    st.write(f"DataFrame shape: {df.shape}")
-
-                    st.data_editor(df, width=4000, hide_index=True)
+                    my_bar.progress(75, text=progress_text)                    
+                    st.write("<div style='text-align: center;'><strong> SOTR Matrix </strong></div>", unsafe_allow_html=True)
+                    st.data_editor(df, hide_index=True, width=5000)
                     
                     output = io.BytesIO()
                     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -153,9 +156,9 @@ def convert_pdf_to_markdown(file_content, file_name):
 
 def tender_qa_tab(llm_client):
     st.subheader("Tender Q&A")
-    
+
     file_type = st.radio("Choose file type to upload:", ("PDF", "Processed Markdown"), key="tender_qa_file_type")
-    
+
     if file_type == "PDF":
         uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
     else:
@@ -163,18 +166,24 @@ def tender_qa_tab(llm_client):
 
     if uploaded_file is not None:
         st.write(f"{file_type} uploaded successfully!")
-        
+
         if file_type == "PDF":
             try:
+                file_content = uploaded_file.getvalue()
+                time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
+                estimated_pages = len(file_content) // 10000
+                ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages
+                st.write(f"Estimated time to complete: {ETA_time_in_minutes:.2f} minutes")
+                
                 progress_text = "Processing tender document. Please wait."
                 my_bar = st.progress(0, text=progress_text)
 
-                tender_in_markdown_format = convert_pdf_to_markdown(uploaded_file.getvalue(), uploaded_file.name)
-                
+                tender_in_markdown_format = convert_pdf_to_markdown(file_content, uploaded_file.name)
+
                 if not tender_in_markdown_format:
                     st.error("PDF to Markdown conversion failed: Empty result")
                     return
-                
+
                 st.download_button(
                     label="📥 Download Processed Markdown",
                     data=tender_in_markdown_format,
@@ -189,11 +198,12 @@ def tender_qa_tab(llm_client):
                 tender_in_markdown_format = "Error occurred while processing the document."
         else:
             tender_in_markdown_format = uploaded_file.getvalue().decode("utf-8")
-        
+
         st.write("Displaying chat container...")
         tender_qa_chat_container(llm_client, tender_in_markdown_format)
     else:
         st.write("Please upload a document to start the Q&A session.")
+
 
 def tender_qa_chat_container(llm_client, markdown_text):
     st.subheader("Tender Q&A Chat")
@@ -238,8 +248,7 @@ def tender_qa_chat_container(llm_client, markdown_text):
             st.markdown(response)
 
 def compliance_check_tab():
-    st.subheader("Compliance Check")
-    st.write("This tab will contain the compliance check functionality.")
+    st.subheader("Working In Progress...")
 
 def main():
     env_vars = load_env_vars()
@@ -252,7 +261,7 @@ def main():
 
     logging.basicConfig(format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 
-    tab1, tab2, tab3 = st.tabs(["SOTR Processing", "Tender Q&A", "Compliance Check"])
+    tab1, tab2, tab3 = st.tabs(["SOTR Processing", "Tender Q&A", "Compliance Check (WIP)"])
 
     llm_client = get_llm_client(env_vars)
 
