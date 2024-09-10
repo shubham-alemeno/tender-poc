@@ -10,6 +10,7 @@ import pandas as pd
 import gc
 from dotenv import load_dotenv
 load_dotenv()
+import traceback
 
 @st.cache_data
 def load_env_vars():
@@ -77,6 +78,19 @@ def sotr_processing_tab(llm_client):
             
             st.write("Before get_matrix_points")
             try:
+                markdown_text_splits = sotr.split_markdown_by_headers()
+                st.write(f"Number of markdown splits: {len(markdown_text_splits)}")
+                
+                cleaned_text_splits = []
+                for point in markdown_text_splits:
+                    if 'metadata' in point and 'Header 2' in point.metadata:
+                        section_header = point.metadata["Header 2"]
+                        section_no = section_header.split(" ")[0]
+                        if point.page_content.strip():
+                            cleaned_text_splits.append({"section": section_no, "content": point.page_content})
+                
+                st.write(f"Number of cleaned text splits: {len(cleaned_text_splits)}")
+                
                 df, split_text = sotr.get_matrix_points()
                 if df.empty:
                     st.warning("No data was extracted from the document. Please check the content and try again.")
@@ -84,7 +98,8 @@ def sotr_processing_tab(llm_client):
                     my_bar.progress(75, text=progress_text)
                     
                     st.write(f"DataFrame shape: {df.shape}")
-                    st.dataframe(df)
+
+                    st.data_editor(df, width=4000, hide_index=True)
                     
                     output = io.BytesIO()
                     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -105,6 +120,7 @@ def sotr_processing_tab(llm_client):
                 st.error(f"Error in get_matrix_points: {str(e)}")
                 st.write(f"Exception type: {type(e).__name__}")
                 st.write(f"Exception details: {e.__dict__}")
+                st.write(f"Traceback: {traceback.format_exc()}")
                 st.warning("Processing completed with errors. Some sections may have been skipped.")
             st.write("After get_matrix_points")
             
@@ -112,6 +128,7 @@ def sotr_processing_tab(llm_client):
             st.error(f"Error processing SOTR document: {str(e)}")
             st.write(f"Exception type: {type(e).__name__}")
             st.write(f"Exception details: {e.__dict__}")
+            st.write(f"Traceback: {traceback.format_exc()}")
 
 @st.cache_data
 def convert_pdf_to_markdown(file_content, file_name):
@@ -121,7 +138,7 @@ def convert_pdf_to_markdown(file_content, file_name):
 
     try:
         tender_pdf_markdown = PDFMarkdown(pdf_path=tmp_file_path, file_id=file_name)
-        tender_in_markdown_format = tender_pdf_markdown.pdf_to_markdown()
+        tender_in_markdown_format = tender_pdf_markdown.pdf_to_markdown(file_content)
         return tender_in_markdown_format
     finally:
         tender_pdf_markdown = None

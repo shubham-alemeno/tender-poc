@@ -35,6 +35,8 @@ from marker.settings import settings
 from langchain.text_splitter import MarkdownHeaderTextSplitter
 from functools import lru_cache
 import tempfile
+import time
+import os
 
 @lru_cache(maxsize=1)
 def get_marker_models():
@@ -49,7 +51,6 @@ class PDFMarkdown:
         self.markdown_file_path=None
         self.file_id=file_id
 
-
     def pdf_to_markdown(self, file_content):
         """Convert PDF content to Markdown using marker-pdf library."""
         model_lst = get_marker_models()
@@ -62,7 +63,12 @@ class PDFMarkdown:
             self.markdown_text = full_text
             return self.markdown_text
         finally:
-            os.unlink(temp_file_path)
+            temp_file.close()            
+            time.sleep(0.1)           
+            try:
+                os.unlink(temp_file_path)
+            except PermissionError:
+                print(f"Could not delete temporary file: {temp_file_path}")
 
 
     def save_markdown_to_file(self,file_path,output_name):
