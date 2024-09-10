@@ -37,19 +37,9 @@ def get_llm_client(env_vars):
     return LLMClient(anthropic_model=env_vars.get('anthropic_model'))
 
 def sotr_processing_tab(llm_client):
-    st.subheader("SOTR Processing")
-    st.write("This tab will contain the SOTR processing functionality.")
-
-    file_type = st.radio("Choose file type to upload:", ("PDF", "Processed Markdown"))
-    
-    if file_type == "PDF":
-        sotr_file = st.file_uploader("Upload SOTR Document", type=["pdf"])
-    else:
-        sotr_file = st.file_uploader("Upload Processed Markdown", type=["md"])
+    sotr_file = st.file_uploader("Upload SOTR Document", type=["pdf"])
 
     if sotr_file is not None:
-        st.write(f"{file_type} uploaded successfully!")
-
         try:
             progress_text = "Processing SOTR document. Please wait."
             my_bar = st.progress(0, text=progress_text)
@@ -57,45 +47,19 @@ def sotr_processing_tab(llm_client):
             file_content = sotr_file.read()
             file_id = f"sotr_{sotr_file.name}"
             sotr = SOTRMarkdown(llm_client=llm_client)
+
+            time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
+            estimated_pages = len(file_content) // 10000
+            ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
+            st.write(f"Estimated time to complete: {ETA_time_in_minutes:.2f} minutes")
             
             my_bar.progress(15, text=progress_text)
-            
-            if file_type == "PDF":
-                time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
-                estimated_pages = len(file_content) // 10000
-                ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
-                st.write(f"Estimated time to complete: {ETA_time_in_minutes:.2f} minutes")
 
-                sotr.load_from_pdf(file_content, file_id)
-                markdown_text = sotr.markdown_text
-                
-                st.download_button(
-                    label="📥 Download Processed Markdown",
-                    data=markdown_text,
-                    file_name="processed_sotr.md",
-                    mime="text/markdown"
-                )
-            else:
-                markdown_text = file_content.decode("utf-8")
-                sotr.load_from_md(markdown_text, file_id)
+            sotr.load_from_pdf(file_content, file_id)
             
             my_bar.progress(50, text=progress_text)
             
-            st.write("Before get_matrix_points")
             try:
-                markdown_text_splits = sotr.split_markdown_by_headers()
-                st.write(f"Number of markdown splits: {len(markdown_text_splits)}")
-                
-                cleaned_text_splits = []
-                for point in markdown_text_splits:
-                    if 'metadata' in point and 'Header 2' in point.metadata:
-                        section_header = point.metadata["Header 2"]
-                        section_no = section_header.split(" ")[0]
-                        if point.page_content.strip():
-                            cleaned_text_splits.append({"section": section_no, "content": point.page_content})
-                
-                st.write(f"Number of cleaned text splits: {len(cleaned_text_splits)}")
-                
                 df, split_text = sotr.get_matrix_points()
                 if df.empty:
                     st.warning("No data was extracted from the document. Please check the content and try again.")
@@ -125,7 +89,6 @@ def sotr_processing_tab(llm_client):
                 st.write(f"Exception details: {e.__dict__}")
                 st.write(f"Traceback: {traceback.format_exc()}")
                 st.warning("Processing completed with errors. Some sections may have been skipped.")
-            st.write("After get_matrix_points")
             
         except Exception as e:
             st.error(f"Error processing SOTR document: {str(e)}")
@@ -155,59 +118,34 @@ def convert_pdf_to_markdown(file_content, file_name):
             st.warning(f"Could not delete temporary file: {str(e)}")
 
 def tender_qa_tab(llm_client):
-    st.subheader("Tender Q&A")
-
-    file_type = st.radio("Choose file type to upload:", ("PDF", "Processed Markdown"), key="tender_qa_file_type")
-
-    if file_type == "PDF":
-        uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
-    else:
-        uploaded_file = st.file_uploader("Upload Processed Markdown", type=["md"], key="tender_qa_md_uploader")
+    uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
 
     if uploaded_file is not None:
-        st.write(f"{file_type} uploaded successfully!")
+        try:
+            file_content = uploaded_file.getvalue()
+            time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
+            estimated_pages = len(file_content) // 10000
+            ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages
+            st.write(f"Estimated time to complete: {ETA_time_in_minutes:.2f} minutes")
+            
+            progress_text = "Processing tender document. Please wait."
+            my_bar = st.progress(0, text=progress_text)
 
-        if file_type == "PDF":
-            try:
-                file_content = uploaded_file.getvalue()
-                time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
-                estimated_pages = len(file_content) // 10000
-                ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages
-                st.write(f"Estimated time to complete: {ETA_time_in_minutes:.2f} minutes")
-                
-                progress_text = "Processing tender document. Please wait."
-                my_bar = st.progress(0, text=progress_text)
+            tender_in_markdown_format = convert_pdf_to_markdown(file_content, uploaded_file.name)
 
-                tender_in_markdown_format = convert_pdf_to_markdown(file_content, uploaded_file.name)
+            if not tender_in_markdown_format:
+                st.error("PDF to Markdown conversion failed: Empty result")
+                return
 
-                if not tender_in_markdown_format:
-                    st.error("PDF to Markdown conversion failed: Empty result")
-                    return
+            my_bar.progress(100, text="Processing complete!")
 
-                st.download_button(
-                    label="📥 Download Processed Markdown",
-                    data=tender_in_markdown_format,
-                    file_name="processed_tender.md",
-                    mime="text/markdown"
-                )
-
-                my_bar.progress(100, text="Processing complete!")
-                st.success("Tender document processed successfully!")
-            except Exception as e:
-                st.error(f"Error processing tender document: {str(e)}")
-                tender_in_markdown_format = "Error occurred while processing the document."
-        else:
-            tender_in_markdown_format = uploaded_file.getvalue().decode("utf-8")
-
-        st.write("Displaying chat container...")
-        tender_qa_chat_container(llm_client, tender_in_markdown_format)
+            tender_qa_chat_container(llm_client, tender_in_markdown_format)
+        except Exception as e:
+            st.error(f"Error processing tender document: {str(e)}")
     else:
-        st.write("Please upload a document to start the Q&A session.")
-
+        pass
 
 def tender_qa_chat_container(llm_client, markdown_text):
-    st.subheader("Tender Q&A Chat")
-    
     st.markdown("""
         <style>
         .element-container:has(.stChatInput) {
