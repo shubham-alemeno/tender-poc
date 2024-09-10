@@ -66,11 +66,22 @@ def sotr_processing_tab(llm_client):
                 else:
                     my_bar.progress(75, text=progress_text)                    
                     st.write("<div style='text-align: center;'><strong> SOTR Matrix </strong></div>", unsafe_allow_html=True)
-                    st.data_editor(df, hide_index=True, width=5000)
+                    
+                    edited_df = st.data_editor(
+                        df,
+                        num_rows="dynamic",
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Sr. No.": st.column_config.NumberColumn(width="small"),
+                            "Clause": st.column_config.TextColumn(width="large"),
+                            "Clause Reference": st.column_config.TextColumn(width="small")
+                        }
+                    )
                     
                     output = io.BytesIO()
                     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                        df.to_excel(writer, index=False, sheet_name='Sheet1')
+                        edited_df.to_excel(writer, index=False, sheet_name='Sheet1')
                     excel_data = output.getvalue()
                     
                     st.download_button(
@@ -189,6 +200,8 @@ def compliance_check_tab():
     st.subheader("Working In Progress...")
 
 def main():
+    st.set_page_config(layout="wide")
+
     env_vars = load_env_vars()
 
     if not all(env_vars.values()):
