@@ -5,3 +5,4 @@ venv
 docs/
 poetry.lock
 key.json
+env/
