@@ -76,14 +76,14 @@ class PDFMarkdown:
                            start_page: int = None, metadata: Optional[Dict] = None,
                            langs: Optional[List[str]] = None, batch_multiplier: int = 1,
                            ocr_all_pages: bool = False, progress_callback=None) -> Tuple[str, Dict[str, Image.Image], Dict]:
-        total_steps = 10
+        total_steps = 11
         current_step = 0
 
         def update_progress(step_name):
             nonlocal current_step
             current_step += 1
             if progress_callback:
-                progress_callback(current_step / total_steps, step_name)
+                progress_callback((current_step / total_steps) * 100, step_name)
 
         ocr_all_pages = ocr_all_pages or settings.OCR_ALL_PAGES
         if metadata:

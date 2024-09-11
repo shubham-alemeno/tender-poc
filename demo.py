@@ -137,15 +137,15 @@ def tender_qa_tab(llm_client):
             time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
             estimated_pages = len(file_content) // 10000
             ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages
-            st.write(f"Estimated time to complete: {ETA_time_in_minutes:.2f} minutes")
             
-            progress_text = "Processing tender document. Please wait."
+            progress_text = "Started processing tender document : 0% complete"
             my_bar = st.progress(0, text=progress_text)
 
-            with st.spinner('Running PDF pre-processing...'):
+            with st.spinner(f"this might take up to {ETA_time_in_minutes:.2f} minutes"):
                 def update_progress(step, step_name):
-                    progress = int((step  * 100))
-                    my_bar.progress(progress, text=f"{progress_text} {int((step  * 100))}% complete")
+                    print(f"Step {step_name}: {step}")
+                    progress = int(step)
+                    my_bar.progress(progress, text=f"{step_name} : {int(step)}% complete")
 
                 tender_in_markdown_format = convert_pdf_to_markdown(file_content, uploaded_file.name, update_progress)
 
