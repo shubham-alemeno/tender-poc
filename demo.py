@@ -144,8 +144,8 @@ def tender_qa_tab(llm_client):
 
             with st.spinner('Running PDF pre-processing...'):
                 def update_progress(step, step_name):
-                    progress = int((step / 10) * 100)
-                    my_bar.progress(progress, text=f"{progress_text} Step {step}/10: {step_name}")
+                    progress = int((step  * 100))
+                    my_bar.progress(progress, text=f"{progress_text} {int((step  * 100))}% complete")
 
                 tender_in_markdown_format = convert_pdf_to_markdown(file_content, uploaded_file.name, update_progress)
 
