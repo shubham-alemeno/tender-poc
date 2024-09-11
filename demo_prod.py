@@ -2,7 +2,7 @@ import streamlit as st
 import logging
 from utils.llm_client import LLMClient
 from utils.sotr_construction import SOTRMarkdown
-from utils.markdown_utils_experimental import PDFMarkdown
+from utils.markdown_utils import PDFMarkdown
 import os
 import tempfile
 import io
@@ -107,15 +107,15 @@ def sotr_processing_tab(llm_client):
             st.write(f"Exception details: {e.__dict__}")
             st.write(f"Traceback: {traceback.format_exc()}")
 
-def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
+@st.cache_data(show_spinner=False)
+def convert_pdf_to_markdown(file_content, file_name):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(file_content)
         tmp_file_path = tmp_file.name
 
     try:
         tender_pdf_markdown = PDFMarkdown(pdf_path=tmp_file_path, file_id=file_name)
-        
-        tender_in_markdown_format = tender_pdf_markdown.pdf_to_markdown(file_content, progress_callback=progress_callback)
+        tender_in_markdown_format = tender_pdf_markdown.pdf_to_markdown(file_content)
         return tender_in_markdown_format
     finally:
         tender_pdf_markdown = None
@@ -143,11 +143,7 @@ def tender_qa_tab(llm_client):
             my_bar = st.progress(0, text=progress_text)
 
             with st.spinner('Running PDF pre-processing...'):
-                def update_progress(step, step_name):
-                    progress = int((step / 10) * 100)
-                    my_bar.progress(progress, text=f"{progress_text} Step {step}/10: {step_name}")
-
-                tender_in_markdown_format = convert_pdf_to_markdown(file_content, uploaded_file.name, update_progress)
+                tender_in_markdown_format = convert_pdf_to_markdown(file_content, uploaded_file.name)
 
             if not tender_in_markdown_format:
                 st.error("PDF to Markdown conversion failed: Empty result")
