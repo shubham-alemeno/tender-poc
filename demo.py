@@ -37,9 +37,18 @@ def get_llm_client(env_vars):
     return LLMClient(anthropic_model=env_vars.get('anthropic_model'))
 
 def sotr_processing_tab(llm_client):
+    if 'sotr_processed' not in st.session_state:
+        st.session_state.sotr_processed = False
+        st.session_state.processed_df = None
+        st.session_state.last_uploaded_file = None
+
     sotr_file = st.file_uploader("Upload SOTR Document", type=["pdf"])
 
-    if sotr_file is not None:
+    if sotr_file is not None and sotr_file != st.session_state.last_uploaded_file:
+        st.session_state.sotr_processed = False
+        st.session_state.last_uploaded_file = sotr_file
+
+    if sotr_file is not None and not st.session_state.sotr_processed:
         try:
             progress_text = "Processing SOTR document. Please wait."
             my_bar = st.progress(0, text=progress_text)
@@ -64,36 +73,12 @@ def sotr_processing_tab(llm_client):
                 if df.empty:
                     st.warning("No data was extracted from the document. Please check the content and try again.")
                 else:
-                    my_bar.progress(75, text=progress_text)                    
-                    st.write("<div style='text-align: center;'><strong> SOTR Matrix </strong></div>", unsafe_allow_html=True)
-                    
-                    edited_df = st.data_editor(
-                        df,
-                        num_rows="dynamic",
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "Sr. No.": st.column_config.NumberColumn(width="small"),
-                            "Clause": st.column_config.TextColumn(width="large"),
-                            "Clause Reference": st.column_config.TextColumn(width="small")
-                        }
-                    )
-                    
-                    output = io.BytesIO()
-                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                        edited_df.to_excel(writer, index=False, sheet_name='Sheet1')
-                    st.session_state["excel_data"] = output.getvalue()
+                    my_bar.progress(75, text=progress_text)
+                    st.session_state.processed_df = df
+                    st.session_state.sotr_processed = True
                     
                     my_bar.progress(100, text="Processing complete!")
                     
-                    st.success("SOTR document processed successfully!")
-
-                    st.download_button(
-                        label="📥 Download Current Result",
-                        data=st.session_state["excel_data"],
-                        file_name="sotr_matrix.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
             except Exception as e:
                 st.error(f"Error in get_matrix_points: {str(e)}")
                 st.write(f"Exception type: {type(e).__name__}")
@@ -106,6 +91,33 @@ def sotr_processing_tab(llm_client):
             st.write(f"Exception type: {type(e).__name__}")
             st.write(f"Exception details: {e.__dict__}")
             st.write(f"Traceback: {traceback.format_exc()}")
+
+    if st.session_state.sotr_processed and st.session_state.processed_df is not None:
+        st.write("<div style='text-align: center;'><strong> SOTR Matrix </strong></div>", unsafe_allow_html=True)
+        
+        edited_df = st.data_editor(
+            st.session_state.processed_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Sr. No.": st.column_config.NumberColumn(width="small"),
+                "Clause": st.column_config.TextColumn(width="large"),
+                "Clause Reference": st.column_config.TextColumn(width="small")
+            }
+        )
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            edited_df.to_excel(writer, index=False, sheet_name='Sheet1')
+        excel_data = output.getvalue()
+        
+        st.download_button(
+            label="📥 Download Current Result",
+            data=excel_data,
+            file_name="sotr_matrix.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
 def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
