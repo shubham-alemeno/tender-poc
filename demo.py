@@ -60,7 +60,7 @@ def sotr_processing_tab(llm_client):
             time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
             estimated_pages = len(file_content) // 10000
             ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
-            st.write(f"Estimated time to complete: {ETA_time_in_minutes:.2f} minutes")
+            st.write(f"This might take upto {ETA_time_in_minutes:.2f} minutes")
             
             my_bar.progress(15, text=progress_text)
 
@@ -154,7 +154,7 @@ def tender_qa_tab(llm_client):
             progress_text = "Started processing tender document : 0% complete"
             my_bar = st.progress(0, text=progress_text)
 
-            with st.spinner(f"this might take up to {ETA_time_in_minutes:.2f} minutes"):
+            with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):
                 def update_progress(step, step_name):
                     print(f"Step {step_name}: {step}")
                     progress = int(step)
