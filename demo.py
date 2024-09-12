@@ -60,31 +60,31 @@ def sotr_processing_tab(llm_client):
             time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
             estimated_pages = len(file_content) // 10000
             ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
-            st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes")
             
-            my_bar.progress(15, text=progress_text)
+            with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):        
+                my_bar.progress(15, text=progress_text)
 
-            sotr.load_from_pdf(file_content, file_id)
-            
-            my_bar.progress(50, text=progress_text)
-            
-            try:
-                df, split_text = sotr.get_matrix_points()
-                if df.empty:
-                    st.warning("No data was extracted from the document. Please check the content and try again.")
-                else:
-                    my_bar.progress(75, text=progress_text)
-                    st.session_state.processed_df = df
-                    st.session_state.sotr_processed = True
-                    
-                    my_bar.progress(100, text="Processing complete!")
-                    
-            except Exception as e:
-                st.error(f"Error in get_matrix_points: {str(e)}")
-                st.write(f"Exception type: {type(e).__name__}")
-                st.write(f"Exception details: {e.__dict__}")
-                st.write(f"Traceback: {traceback.format_exc()}")
-                st.warning("Processing completed with errors. Some sections may have been skipped.")
+                sotr.load_from_pdf(file_content, file_id)
+                
+                my_bar.progress(50, text=progress_text)
+                
+                try:
+                    df, split_text = sotr.get_matrix_points()
+                    if df.empty:
+                        st.warning("No data was extracted from the document. Please check the content and try again.")
+                    else:
+                        my_bar.progress(75, text=progress_text)
+                        st.session_state.processed_df = df
+                        st.session_state.sotr_processed = True
+                        
+                        my_bar.progress(100, text="Processing complete!")
+                        
+                except Exception as e:
+                    st.error(f"Error in get_matrix_points: {str(e)}")
+                    st.write(f"Exception type: {type(e).__name__}")
+                    st.write(f"Exception details: {e.__dict__}")
+                    st.write(f"Traceback: {traceback.format_exc()}")
+                    st.warning("Processing completed with errors. Some sections may have been skipped.")
             
         except Exception as e:
             st.error(f"Error processing SOTR document: {str(e)}")
