@@ -59,7 +59,7 @@ class PDFMarkdown:
             temp_file_path = temp_file.name
 
         try:
-            full_text, doc_images, out_meta = self.convert_single_pdf(fname=temp_file_path, model_lst=model_lst, batch_multiplier=3)
+            full_text, doc_images, out_meta = self.convert_single_pdf(fname=temp_file_path, batch_multiplier=3,model_lst=model_lst)
             self.markdown_text = full_text
             return self.markdown_text
         finally:

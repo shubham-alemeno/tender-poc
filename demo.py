@@ -82,18 +82,18 @@ def sotr_processing_tab(llm_client):
                     output = io.BytesIO()
                     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                         edited_df.to_excel(writer, index=False, sheet_name='Sheet1')
-                    excel_data = output.getvalue()
-                    
-                    st.download_button(
-                        label="📥 Download Current Result",
-                        data=excel_data,
-                        file_name="sotr_matrix.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                    st.session_state["excel_data"] = output.getvalue()
                     
                     my_bar.progress(100, text="Processing complete!")
                     
                     st.success("SOTR document processed successfully!")
+
+                    st.download_button(
+                        label="📥 Download Current Result",
+                        data=st.session_state["excel_data"],
+                        file_name="sotr_matrix.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
             except Exception as e:
                 st.error(f"Error in get_matrix_points: {str(e)}")
                 st.write(f"Exception type: {type(e).__name__}")
@@ -130,7 +130,8 @@ def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
 
 def tender_qa_tab(llm_client):
     uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
-
+    st.session_state["pdf_processed"]=False
+    tender_in_markdown_format=None
     if uploaded_file is not None:
         try:
             file_content = uploaded_file.getvalue()
@@ -154,13 +155,18 @@ def tender_qa_tab(llm_client):
                 return
 
             my_bar.progress(100, text="Processing complete!")
-
-            tender_qa_chat_container(llm_client, tender_in_markdown_format)
+            st.session_state["pdf_processed"]=True
+           
         except Exception as e:
             st.error(f"Error processing tender document: {str(e)}")
     else:
         pass
 
+    if st.session_state["pdf_processed"] and tender_in_markdown_format is not None:
+        tender_qa_chat_container(llm_client, tender_in_markdown_format)
+
+
+@st.fragment
 def tender_qa_chat_container(llm_client, markdown_text):
     st.markdown("""
         <style>

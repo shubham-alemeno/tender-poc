@@ -28,7 +28,10 @@ class SOTRMarkdown(PDFMarkdown):
         cleaned_csv_data = []
         for i, row in enumerate(split_text[1:]):
             items = row.split("|")
-            cleaned_csv_data.append([i, items[1].replace('"', ''), items[2]])
+            if len(items)==3:
+                cleaned_csv_data.append([i, items[1].replace('"', ''), items[2]])
+            else:
+                continue
         df = pd.DataFrame(columns=headers, data=cleaned_csv_data)
         return df
 
