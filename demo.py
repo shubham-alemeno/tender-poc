@@ -210,14 +210,15 @@ def tender_qa_chat_container(llm_client, markdown_text):
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        response = llm_client.call_llm(
-            system_prompt=f"You are a helpful assistant. Use the following tender document to answer questions:\n\n{markdown_text}",
-            user_prompt=prompt
-        )
+        with st.spinner("Answering..."):
+            response = llm_client.call_llm(
+                system_prompt=f"You are a helpful assistant. Use the following tender document to answer questions:\n\n{markdown_text}",
+                user_prompt=prompt
+            )
 
-        st.session_state["history"].append({"role": "assistant", "content": response})
-        with st.chat_message("assistant"):
-            st.markdown(response)
+            st.session_state["history"].append({"role": "assistant", "content": response})
+            with st.chat_message("assistant"):
+                st.markdown(response)
 
 def compliance_check_tab():
     st.subheader("Working In Progress...")
