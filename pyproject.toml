@@ -15,6 +15,7 @@ langchain = "^0.2.15"
 anthropic = "^0.34.2"
 python-dotenv = "^1.0.1"
 xlsxwriter = "^3.2.0"
+openpyxl = "^3.1.5"
 
 
 [build-system]

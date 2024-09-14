@@ -3,6 +3,7 @@ import logging
 from utils.llm_client import LLMClient
 from utils.sotr_construction import SOTRMarkdown
 from utils.markdown_utils_experimental import PDFMarkdown
+from utils.compliance_check import ComplianceChecker
 import os
 import tempfile
 import io
@@ -36,7 +37,7 @@ def load_env_vars():
 def get_llm_client(env_vars):
     return LLMClient(anthropic_model=env_vars.get('anthropic_model'))
 
-def sotr_processing_tab(llm_client):
+def sotr_processing_tab(llm_client) -> None:
     if 'sotr_processed' not in st.session_state:
         st.session_state.sotr_processed = False
         st.session_state.processed_df = None
@@ -140,7 +141,7 @@ def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
         except Exception as e:
             st.warning(f"Could not delete temporary file: {str(e)}")
 
-def tender_qa_tab(llm_client):
+def tender_qa_tab(llm_client) -> None:
     uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
     st.session_state["pdf_processed"]=False
     tender_in_markdown_format=None
@@ -179,7 +180,7 @@ def tender_qa_tab(llm_client):
 
 
 @st.fragment
-def tender_qa_chat_container(llm_client, markdown_text):
+def tender_qa_chat_container(llm_client, markdown_text) -> None:
     st.markdown("""
         <style>
         .element-container:has(.stChatInput) {
@@ -220,8 +221,50 @@ def tender_qa_chat_container(llm_client, markdown_text):
             with st.chat_message("assistant"):
                 st.markdown(response)
 
-def compliance_check_tab():
-    st.subheader("Working In Progress...")
+def compliance_check_tab() -> None:
+    st.header("Compliance Check")
+    
+    sotr_matrix_file = st.file_uploader("Upload SOTR Matrix", type=["xlsx"], key="compliance_check_matrix_uploader")
+    tender_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="compliance_check_tender_pdf_uploader")
+
+    if 'compliance_results' not in st.session_state:
+        st.session_state.compliance_results = None
+
+    if sotr_matrix_file and tender_file:
+        if st.button("Run Compliance Check"):
+            compliance_checker = ComplianceChecker()
+            
+            try:
+                with st.spinner("Loading tender document..."):
+                    compliance_checker.load_tender(tender_file.getvalue())
+                
+                with st.spinner("Loading SOTR matrix..."):
+                    compliance_checker.load_matrix(sotr_matrix_file.getvalue())
+                
+                with st.spinner("Checking compliance..."):
+                    results = compliance_checker.check_compliance()
+
+                st.session_state.compliance_results = results
+
+            except Exception as e:
+                st.error(f"Error during compliance check: {str(e)}")
+
+    if st.session_state.compliance_results is not None:
+        st.markdown("<div style='text-align: center;'><strong>Compliance Check Matrix</strong></div>", unsafe_allow_html=True)
+        st.dataframe(st.session_state.compliance_results, use_container_width=True, hide_index=True)
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            st.session_state.compliance_results.to_excel(writer, index=False, sheet_name='Compliance Check')
+        excel_data = output.getvalue()
+
+        st.download_button(
+            label="📥 Download Compliance Check Results",
+            data=excel_data,
+            file_name="compliance_check_results.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
 
 def main():
     st.set_page_config(layout="wide")
@@ -236,7 +279,7 @@ def main():
 
     logging.basicConfig(format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 
-    tab1, tab2, tab3 = st.tabs(["SOTR Processing", "Tender Q&A", "Compliance Check (WIP)"])
+    tab1, tab2, tab3 = st.tabs(["SOTR Processing", "Tender Q&A", "Compliance Check"])
 
     llm_client = get_llm_client(env_vars)
 
