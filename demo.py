@@ -39,16 +39,16 @@ def load_env_vars():
 def get_llm_client(env_vars):
     return LLMClient(anthropic_model=env_vars.get('anthropic_model'))
 
-def sotr_processing_tab(llm_client) -> None:
+def sotr_document_tab(llm_client) -> None:
     
+    st.write("<div style='text-align: center; font-size: 24px; margin-top: 100px;'>Complete the process to finalize Compliance Matrix</div>", unsafe_allow_html=True)
+
     sotr_chat_container(llm_client)
     
     if 'sotr_processed' not in st.session_state:
         st.session_state.sotr_processed = False
         st.session_state.processed_df = None
         st.session_state.last_uploaded_file = None
-
-        st.write("<div style='text-align: center; font-size: 24px; margin-top: 100px;'>Complete the process to finalize Compliance Matrix</div>", unsafe_allow_html=True)
 
     with st.sidebar:
         sotr_file = st.file_uploader("Upload SOTR Document", type=["pdf"])
@@ -106,7 +106,7 @@ def sotr_processing_tab(llm_client) -> None:
         st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>② Open & Edit Compliance Matrix</div>", unsafe_allow_html=True)
         st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>③ Finalize Compliance Matrix</div>", unsafe_allow_html=True)
     else:
-        st.write("<div style='text-align: center; font-size: 24px; margin-top: 100px;'>❶ Upload SOTR ✔</div>", unsafe_allow_html=True)
+        st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>❶ Upload SOTR ✔</div>", unsafe_allow_html=True)
         st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>② Open & Edit Compliance Matrix</div>", unsafe_allow_html=True)
         st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>③ Finalize Compliance Matrix</div>", unsafe_allow_html=True)
 
@@ -266,7 +266,7 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
             with st.chat_message("assistant"):
                 st.markdown(response)
 
-def compliance_check_tab() -> None:
+def compliance_matrix_tab() -> None:
     st.header("Compliance Check")
     
     sotr_matrix_file = st.file_uploader("Upload SOTR Matrix", type=["xlsx"], key="compliance_check_matrix_uploader")
@@ -336,16 +336,16 @@ def main():
 
     logging.basicConfig(format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 
-    tab1, tab2, tab3 = st.tabs(["SOTR Processing", "Tender Q&A", "Compliance Check"])
+    tab1, tab2, tab3 = st.tabs(["SOTR Document", "Tender Q&A", "Compliance Matrix"])
 
     llm_client = get_llm_client(env_vars)
 
     with tab1:
-        sotr_processing_tab(llm_client)
+        sotr_document_tab(llm_client)
     with tab2:
         tender_qa_tab(llm_client)
     with tab3:
-        compliance_check_tab()
+        compliance_matrix_tab()
 
 if __name__ == "__main__":
     main()
