@@ -2,6 +2,7 @@ import pandas as pd
 from utils.markdown_utils_experimental import PDFMarkdown
 from io import BytesIO, StringIO
 from utils.llm_client import LLMClient
+import random
 import time
 from utils.system_prompt import compliance_check_system_prompt
 
@@ -75,10 +76,22 @@ class ComplianceChecker:
             """
             user_prompt = f"Tender Document:\n{self.tender_markdown}\n\nClauses:\n" + "\n".join([f"{index}, {row['Clause']}" for index, row in rows.iterrows()])
 
-            compliance_checker_expert_answers = compliance_checker_expert.call_llm(
-                system_prompt=compliance_check_system_prompt,
-                user_prompt=user_prompt
-            )
+            max_retries = 5
+            base_delay = 1
+            for attempt in range(max_retries):
+                try:
+                    compliance_checker_expert_answers = compliance_checker_expert.call_llm(
+                        system_prompt=compliance_check_system_prompt,
+                        user_prompt=user_prompt
+                    )
+                    break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise Exception(f"Max retries reached. Last error: {str(e)}")
+                    
+                    delay = (base_delay * 2 ** attempt) + (random.randint(0, 1000) / 1000)
+                    print(f"Error calling LLM API. Retrying in {delay:.2f} seconds...")
+                    time.sleep(delay)
             
             print(compliance_checker_expert_answers)
 

@@ -19,7 +19,7 @@ class SOTRMarkdown(PDFMarkdown):
 
     def load_from_pdf(self, file_content, file_id):
         self.file_id = file_id    
-        self.pdf_path = None  # or handle this differently if needed
+        self.pdf_path = None
         self.markdown_text = self.pdf_to_markdown(file_content)
         return self.markdown_text
 
