@@ -6,3 +6,4 @@ docs/
 poetry.lock
 key.json
 env/
+matrix_popup_button
