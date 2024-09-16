@@ -278,6 +278,8 @@ def color_rows(row):
 def main():
     st.set_page_config(layout="wide")
 
+    st.markdown("""<style>div.stButton > button:first-child {    background-color: #252525;    border: 1px solid #353535;}</style>""", unsafe_allow_html=True)
+
     env_vars = load_env_vars()
 
     if not all(env_vars.values()):
