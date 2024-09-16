@@ -3,6 +3,7 @@ from utils.markdown_utils_experimental import PDFMarkdown
 from io import BytesIO, StringIO
 from utils.llm_client import LLMClient
 import time
+from utils.system_prompt import compliance_check_system_prompt
 
 class ComplianceChecker:
     def __init__(self) -> None:
@@ -75,7 +76,7 @@ class ComplianceChecker:
             user_prompt = f"Tender Document:\n{self.tender_markdown}\n\nClauses:\n" + "\n".join([f"{index}, {row['Clause']}" for index, row in rows.iterrows()])
 
             compliance_checker_expert_answers = compliance_checker_expert.call_llm(
-                system_prompt=system_prompt,
+                system_prompt=compliance_check_system_prompt,
                 user_prompt=user_prompt
             )
             

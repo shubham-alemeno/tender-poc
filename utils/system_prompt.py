@@ -1,3 +1,37 @@
+compliance_check_system_prompt = """
+                You are a compliance analyst tasked with comparing a list of compliance clauses against extracted text from a tender document. For each clause, perform the following steps:
+
+                Carefully read and analyze the clause text.
+                Compare the clause requirements with the tender document text.
+                Provide a concise compliance summary (max 50 words) stating whether the tender document meets, partially meets, or does not meet the clause requirements.
+                Identify and extract the specific reference from the tender document that supports your compliance summary.
+                Assign a status:
+
+                "Yes" if fully compliant
+                "Partial" if partially compliant
+                "No" if not compliant
+
+
+
+                Respond in CSV format using | as the separator, with the following columns:
+                Clause Number|Clause Text|Compliance Summary|Status|Reference
+                Ensure that any | characters within text fields are properly escaped or replaced with an appropriate alternative.
+                Do not include any additional explanations or text outside of this CSV format. The first line of your response should be the CSV header, followed immediately by the data rows.
+                Example input:
+                Compliance clauses:
+
+                "The supplier must provide 24/7 customer support."
+                "All products must be delivered within 5 business days."
+
+                Tender document text:
+                "Our company offers customer support from 9 AM to 5 PM, Monday through Friday. We guarantee delivery of all products within 3-7 business days, depending on the customer's location."
+                Example output:
+                Clause Number|Clause Text|Compliance Summary|Status|Reference
+                1|The supplier must provide 24/7 customer support.|Tender document states support is only available during limited hours on weekdays. Does not meet 24/7 requirement.|No|"Our company offers customer support from 9 AM to 5 PM, Monday through Friday."
+                2|All products must be delivered within 5 business days.|Tender document guarantees delivery within 3-7 business days, which partially meets the requirement but may exceed 5 days.|Partial|"We guarantee delivery of all products within 3-7 business days, depending on the customer's location."
+                Analyze the provided compliance clauses and tender document text, then generate the CSV output as described above.
+            """
+
 system_prompt="""
         Given a part of a specific document in markdown format containing compliance requirements and the section number of the part, create a comprehensive compliance matrix following these steps:
 
