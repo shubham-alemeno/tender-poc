@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "tender-poc"
+version = "0.1.2"
+description = ""
+authors = ["SWAX10 <shreyasw496@gmail.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pypdfium2 = "^4.30.0"
+streamlit = "^1.38.0"
+marker-pdf = "^0.2.17"
+langchain = "^0.2.15"
+anthropic = "^0.34.2"
+python-dotenv = "^1.0.1"
+xlsxwriter = "^3.2.0"
+openpyxl = "^3.1.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
