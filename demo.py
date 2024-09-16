@@ -251,7 +251,8 @@ def compliance_check_tab() -> None:
 
     if st.session_state.compliance_results is not None:
         st.markdown("<div style='text-align: center;'><strong>Compliance Check Matrix</strong></div>", unsafe_allow_html=True)
-        st.dataframe(st.session_state.compliance_results, use_container_width=True, hide_index=True)
+        styled_results = st.session_state.compliance_results.style.apply(color_rows, axis=1)
+        st.dataframe(styled_results, use_container_width=True, hide_index=True)
 
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -264,6 +265,14 @@ def compliance_check_tab() -> None:
             file_name="compliance_check_results.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
+def color_rows(row):
+    color_map = {
+        'Yes': 'background-color: #006400',  # Dark green
+        'Partial': 'background-color: #8B8000',  # Dark yellow
+        'No': 'background-color: #8B0000'  # Dark red
+    }
+    return [color_map.get(row['Status'], '') for _ in row]
         
 
 def main():
