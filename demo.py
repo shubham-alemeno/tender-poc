@@ -49,6 +49,8 @@ def sotr_document_tab(llm_client) -> None:
         st.session_state.sotr_processed = False
         st.session_state.processed_df = None
         st.session_state.last_uploaded_file = None
+        st.session_state.edit_mode = False
+        st.session_state.done_editing = False
 
     with st.sidebar:
         sotr_file = st.file_uploader("Upload SOTR Document", type=["pdf"])
@@ -56,6 +58,8 @@ def sotr_document_tab(llm_client) -> None:
         if sotr_file is not None and sotr_file != st.session_state.last_uploaded_file:
             st.session_state.sotr_processed = False
             st.session_state.last_uploaded_file = sotr_file
+            st.session_state.edit_mode = False
+            st.session_state.done_editing = False
 
         if sotr_file is not None and not st.session_state.sotr_processed:
             try:
@@ -105,12 +109,34 @@ def sotr_document_tab(llm_client) -> None:
         st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>① Upload SOTR</div>", unsafe_allow_html=True)
         st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>② Open & Edit Compliance Matrix</div>", unsafe_allow_html=True)
         st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>③ Finalize Compliance Matrix</div>", unsafe_allow_html=True)
-    else:
+    
+    elif st.session_state.sotr_processed:
         st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>❶ Upload SOTR ✔</div>", unsafe_allow_html=True)
-        st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>② Open & Edit Compliance Matrix</div>", unsafe_allow_html=True)
-        st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>③ Finalize Compliance Matrix</div>", unsafe_allow_html=True)
+        
+        if not st.session_state.done_editing:
+            st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>② Open & Edit Compliance Matrix</div>", unsafe_allow_html=True)
+            
+            if st.button("Edit Compliance Matrix", key="edit_matrix_button"):
+                st.session_state.edit_mode = not st.session_state.edit_mode
 
-    if st.session_state.sotr_processed and st.session_state.processed_df is not None:
+            st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>③ Finalize Compliance Matrix</div>", unsafe_allow_html=True)
+
+            if st.session_state.edit_mode:
+                st.markdown("<div style='display: flex; justify-content: center;'>", unsafe_allow_html=True)
+                edited_df = st.data_editor(st.session_state.processed_df, hide_index=True, use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+                st.markdown("<div style='display: flex; justify-content: center; margin-top: 20px;'>", unsafe_allow_html=True)
+                if st.button("Save", use_container_width=True):
+                    st.session_state.processed_df = edited_df
+                    st.session_state.edit_mode = False
+                    st.session_state.done_editing = True
+                st.markdown("</div>", unsafe_allow_html=True)
+        
+        else:
+            st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>❷ Open & Edit Compliance Matrix ✔</div>", unsafe_allow_html=True)
+            st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>❸ Finalize Compliance Matrix ✔</div>", unsafe_allow_html=True)
+
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             st.session_state.processed_df.to_excel(writer, index=False, sheet_name='Sheet1')
