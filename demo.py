@@ -11,6 +11,7 @@ import pandas as pd
 import gc
 from dotenv import load_dotenv
 import traceback
+import datetime
 
 load_dotenv()
 
@@ -42,8 +43,6 @@ def get_llm_client(env_vars):
 def sotr_document_tab(llm_client) -> None:
     
     st.write("<div style='text-align: center; font-size: 24px; margin-top: 100px;'>Complete the process to finalize Compliance Matrix</div>", unsafe_allow_html=True)
-
-    sotr_chat_container(llm_client)
     
     if 'sotr_processed' not in st.session_state:
         st.session_state.sotr_processed = False
@@ -53,7 +52,23 @@ def sotr_document_tab(llm_client) -> None:
         st.session_state.done_editing = False
 
     with st.sidebar:
-        sotr_file = st.file_uploader("Upload SOTR Document", type=["pdf"])
+        sotr_file_list = os.listdir('sotr_data')
+        selected_file = st.selectbox('Select existing SOTR file', [''] + sotr_file_list)
+        
+        if selected_file and selected_file != st.session_state.last_uploaded_file:
+            file_path = os.path.join('sotr_data', selected_file)
+            try:
+                st.session_state.processed_df = pd.read_excel(file_path)
+                st.session_state.sotr_processed = True
+                st.session_state.last_uploaded_file = selected_file
+                st.session_state.edit_mode = True
+                st.session_state.done_editing = False
+            except Exception as e:
+                st.error(f"Error reading selected file: {str(e)}")
+        
+        st.write("OR")
+        
+        sotr_file = st.file_uploader("Upload new SOTR Document", type=["pdf", "xlsx"])
 
         if sotr_file is not None and sotr_file != st.session_state.last_uploaded_file:
             st.session_state.sotr_processed = False
@@ -68,36 +83,40 @@ def sotr_document_tab(llm_client) -> None:
 
                 file_content = sotr_file.read()
                 file_id = f"sotr_{sotr_file.name}"
-                sotr = SOTRMarkdown(llm_client=llm_client)
 
-                time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
-                estimated_pages = len(file_content) // 10000
-                ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
+                if sotr_file.type == "application/pdf":
+                    sotr = SOTRMarkdown(llm_client=llm_client)
+                    
+                    time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
+                    estimated_pages = len(file_content) // 10000
+                    ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
+                    
+                    with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):        
+                        my_bar.progress(15, text=progress_text)
+                        sotr.load_from_pdf(file_content, file_id)
+                        my_bar.progress(50, text=progress_text)
+                        
+                        try:
+                            df, split_text = sotr.get_matrix_points()
+                            if df.empty:
+                                st.warning("No data was extracted from the document. Please check the content and try again.")
+                            else:
+                                my_bar.progress(75, text=progress_text)
+                                st.session_state.processed_df = df
+                                st.session_state.sotr_processed = True
+                                my_bar.progress(100, text="Processing complete!")
+                        except Exception as e:
+                            st.error(f"Error in get_matrix_points: {str(e)}")
+                            st.write(f"Exception type: {type(e).__name__}")
+                            st.write(f"Exception details: {e.__dict__}")
+                            st.write(f"Traceback: {traceback.format_exc()}")
+                            st.warning("Processing completed with errors. Some sections may have been skipped.")
                 
-                with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):        
-                    my_bar.progress(15, text=progress_text)
-
-                    sotr.load_from_pdf(file_content, file_id)
-                    
-                    my_bar.progress(50, text=progress_text)
-                    
-                    try:
-                        df, split_text = sotr.get_matrix_points()
-                        if df.empty:
-                            st.warning("No data was extracted from the document. Please check the content and try again.")
-                        else:
-                            my_bar.progress(75, text=progress_text)
-                            st.session_state.processed_df = df
-                            st.session_state.sotr_processed = True
-                            
-                            my_bar.progress(100, text="Processing complete!")
-                            
-                    except Exception as e:
-                        st.error(f"Error in get_matrix_points: {str(e)}")
-                        st.write(f"Exception type: {type(e).__name__}")
-                        st.write(f"Exception details: {e.__dict__}")
-                        st.write(f"Traceback: {traceback.format_exc()}")
-                        st.warning("Processing completed with errors. Some sections may have been skipped.")
+                elif sotr_file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+                    st.session_state.processed_df = pd.read_excel(sotr_file)
+                    st.session_state.sotr_processed = True
+                    st.session_state.edit_mode = True
+                    my_bar.progress(100, text="Processing complete!")
                 
             except Exception as e:
                 st.error(f"Error processing SOTR document: {str(e)}")
@@ -105,24 +124,30 @@ def sotr_document_tab(llm_client) -> None:
                 st.write(f"Exception details: {e.__dict__}")
                 st.write(f"Traceback: {traceback.format_exc()}")
     
-    if sotr_file is None:
-        st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>① Upload SOTR</div>", unsafe_allow_html=True)
+    if not st.session_state.sotr_processed:
+        st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>① Select or Upload SOTR</div>", unsafe_allow_html=True)
         st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>② Open & Edit Compliance Matrix</div>", unsafe_allow_html=True)
         st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>③ Finalize Compliance Matrix</div>", unsafe_allow_html=True)
     
     elif st.session_state.sotr_processed:
-        st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>❶ Upload SOTR ✔</div>", unsafe_allow_html=True)
+        st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px; margin-bottom: 40px;'>❶ Select or Upload SOTR ✔</div>", unsafe_allow_html=True)
         
         if not st.session_state.done_editing:
-            st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>② Open & Edit Compliance Matrix</div>", unsafe_allow_html=True)
+            left, middle, right = st.columns([1, 2, 1])
             
-            if st.button("Edit Compliance Matrix", key="edit_matrix_button"):
-                st.session_state.edit_mode = not st.session_state.edit_mode
+            with middle:
+                st.write("<div style='text-align: center; font-size: 24px; margin-bottom: 20px;'>② Open & Edit Compliance Matrix</div>", unsafe_allow_html=True)
+            
+            with right:
+                st.write("<div style='text-align: right; margin-top: 5px;'>", unsafe_allow_html=True)
+                if st.button("Edit Compliance Matrix", key="edit_matrix_button"):
+                    st.session_state.edit_mode = not st.session_state.edit_mode
+                st.write("</div>", unsafe_allow_html=True)
 
-            st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>③ Finalize Compliance Matrix</div>", unsafe_allow_html=True)
+            st.write("<div style='text-align: center; font-size: 24px; margin-top: 60px;'>③ Finalize Compliance Matrix</div>", unsafe_allow_html=True)
 
             if st.session_state.edit_mode:
-                st.markdown("<div style='display: flex; justify-content: center;'>", unsafe_allow_html=True)
+                st.markdown("<div style='display: flex; justify-content: center; margin-top: 40px;'>", unsafe_allow_html=True)
                 edited_df = st.data_editor(st.session_state.processed_df, hide_index=True, use_container_width=True)
                 st.markdown("</div>", unsafe_allow_html=True)
                 
@@ -134,8 +159,8 @@ def sotr_document_tab(llm_client) -> None:
                 st.markdown("</div>", unsafe_allow_html=True)
         
         else:
-            st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>❷ Open & Edit Compliance Matrix ✔</div>", unsafe_allow_html=True)
-            st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>❸ Finalize Compliance Matrix ✔</div>", unsafe_allow_html=True)
+            st.write("<div style='text-align: center; font-size: 24px; margin-top: 40px;'>❷ Open & Edit Compliance Matrix ✔</div>", unsafe_allow_html=True)
+            st.write("<div style='text-align: center; font-size: 24px; margin-top: 40px;'>❸ Finalize Compliance Matrix ✔</div>", unsafe_allow_html=True)
 
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -189,7 +214,7 @@ def sotr_chat_container(llm_client):
 
             st.session_state["sotr_history"].append({"role": "assistant", "content": response})
             with st.chat_message("assistant"):
-                st.markdown(response) 
+                st.markdown(response)
 
 def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
