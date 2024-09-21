@@ -255,13 +255,12 @@ def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
             st.warning(f"Could not delete temporary file: {str(e)}")
 
 def tender_qa_tab(llm_client) -> None:
-    with st.sidebar:
-        st.subheader("Tender Q&A")
-        tender_files = [f for f in os.listdir('tender_data') if os.path.isfile(os.path.join('tender_data', f))]
-        selected_tenders = st.multiselect("Select Processed Tender", options=tender_files, key="selected_tenders")
-        uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
-        st.session_state["pdf_processed"] = False
-        tender_in_markdown_format = None
+    tender_files = [f for f in os.listdir('tender_data') if os.path.isfile(os.path.join('tender_data', f))]
+    uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
+    st.markdown("<div style='text-align: center; margin: 10px 0;'>OR</div>", unsafe_allow_html=True)
+    selected_tenders = st.multiselect("Select Processed Tender", options=tender_files, key="selected_tenders")
+    st.session_state["pdf_processed"] = False
+    tender_in_markdown_format = None
     
     if selected_tenders:
         tender_in_markdown_format = ""
