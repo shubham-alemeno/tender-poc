@@ -61,7 +61,7 @@ def sotr_document_tab(llm_client) -> None:
                 st.session_state.processed_df = pd.read_excel(file_path)
                 st.session_state.sotr_processed = True
                 st.session_state.last_uploaded_file = selected_file
-                st.session_state.edit_mode = True
+                st.session_state.edit_mode = False
                 st.session_state.done_editing = False
             except Exception as e:
                 st.error(f"Error reading selected file: {str(e)}")
@@ -115,7 +115,6 @@ def sotr_document_tab(llm_client) -> None:
                 elif sotr_file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
                     st.session_state.processed_df = pd.read_excel(sotr_file)
                     st.session_state.sotr_processed = True
-                    st.session_state.edit_mode = True
                     my_bar.progress(100, text="Processing complete!")
                 
             except Exception as e:
