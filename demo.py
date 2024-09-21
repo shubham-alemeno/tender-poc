@@ -11,7 +11,7 @@ import pandas as pd
 import gc
 from dotenv import load_dotenv
 import traceback
-import datetime
+from datetime import datetime
 
 load_dotenv()
 
@@ -75,6 +75,13 @@ def sotr_document_tab(llm_client) -> None:
             st.session_state.last_uploaded_file = sotr_file
             st.session_state.edit_mode = False
             st.session_state.done_editing = False
+        
+        st.subheader("Final Compliance Matrix")
+        final_compliance_matrix = st.file_uploader("Upload Final Compliance Matrix", type=["xlsx"])
+        
+        if final_compliance_matrix is not None:
+            st.session_state.final_compliance_matrix = pd.read_excel(final_compliance_matrix)
+            st.success("Final Compliance Matrix uploaded successfully")
 
         if sotr_file is not None and not st.session_state.sotr_processed:
             try:
@@ -156,10 +163,21 @@ def sotr_document_tab(llm_client) -> None:
                     st.session_state.edit_mode = False
                     st.session_state.done_editing = True
                 st.markdown("</div>", unsafe_allow_html=True)
+                
         
         else:
             st.write("<div style='text-align: center; font-size: 24px; margin-top: 40px;'>❷ Open & Edit Compliance Matrix ✔</div>", unsafe_allow_html=True)
             st.write("<div style='text-align: center; font-size: 24px; margin-top: 40px;'>❸ Finalize Compliance Matrix ✔</div>", unsafe_allow_html=True)
+
+            # Automatically save the result
+            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            save_filename = f"sotr_matrix_{current_time}.xlsx"
+            save_path = os.path.join('sotr_data', save_filename)
+            
+            try:
+                st.session_state.processed_df.to_excel(save_path, index=False)
+            except Exception as e:
+                st.error(f"Error saving SOTR Matrix: {str(e)}")
 
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -237,10 +255,25 @@ def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
             st.warning(f"Could not delete temporary file: {str(e)}")
 
 def tender_qa_tab(llm_client) -> None:
-    uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
-    st.session_state["pdf_processed"]=False
-    tender_in_markdown_format=None
-    if uploaded_file is not None:
+    with st.sidebar:
+        st.subheader("Tender Q&A")
+        tender_files = [f for f in os.listdir('tender_data') if os.path.isfile(os.path.join('tender_data', f))]
+        selected_tenders = st.multiselect("Select Processed Tender", options=tender_files, key="selected_tenders")
+        uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
+        st.session_state["pdf_processed"] = False
+        tender_in_markdown_format = None
+    
+    if selected_tenders:
+        tender_in_markdown_format = ""
+        for tender_file in selected_tenders:
+            with open(os.path.join('tender_data', tender_file), 'r') as f:
+                tender_in_markdown_format += f.read() + "\n\n"
+        st.session_state["pdf_processed"] = True
+    
+    elif uploaded_file is not None:
+        st.session_state["tender_document"] = uploaded_file
+        st.session_state["pdf_processed"] = False
+        st.success("Tender Document uploaded successfully")
         try:
             file_content = uploaded_file.getvalue()
             time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
@@ -263,7 +296,7 @@ def tender_qa_tab(llm_client) -> None:
                 return
 
             my_bar.progress(100, text="Processing complete!")
-            st.session_state["pdf_processed"]=True
+            st.session_state["pdf_processed"] = True
            
         except Exception as e:
             st.error(f"Error processing tender document: {str(e)}")
@@ -317,49 +350,55 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                 st.markdown(response)
 
 def compliance_matrix_tab() -> None:
-    st.header("Compliance Check")
-    
-    sotr_matrix_file = st.file_uploader("Upload SOTR Matrix", type=["xlsx"], key="compliance_check_matrix_uploader")
-    tender_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="compliance_check_tender_pdf_uploader")
+    st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>Compliance Check</div>", unsafe_allow_html=True)
 
-    if 'compliance_results' not in st.session_state:
-        st.session_state.compliance_results = None
+    compliance_checker = ComplianceChecker()
 
-    if sotr_matrix_file and tender_file:
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if 'final_compliance_matrix' not in st.session_state:
+            final_compliance_matrix = st.file_uploader("Upload Final Compliance Matrix", type=["xlsx"], key="final_compliance_matrix_uploader")
+            if final_compliance_matrix is not None:
+                compliance_checker.load_matrix(final_compliance_matrix.read())
+                st.session_state['final_compliance_matrix'] = final_compliance_matrix
+                st.success("Final Compliance Matrix uploaded successfully.")
+        else:
+            st.success("Final Compliance Matrix is already uploaded.")
+
+    with col2:
+        if 'tender_document' not in st.session_state:
+            tender_document = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_document_uploader")
+            if tender_document is not None:
+                compliance_checker.load_tender(tender_document.read())
+                st.session_state['tender_document'] = tender_document
+                st.success("Tender Document uploaded successfully.")
+        else:
+            st.success("Tender Document is already uploaded.")
+
+    if 'final_compliance_matrix' in st.session_state and 'tender_document' in st.session_state:
         if st.button("Run Compliance Check"):
-            compliance_checker = ComplianceChecker()
-            
-            try:
-                with st.spinner("Loading tender document..."):
-                    compliance_checker.load_tender(tender_file.getvalue())
-                
-                with st.spinner("Loading SOTR matrix..."):
-                    compliance_checker.load_matrix(sotr_matrix_file.getvalue())
-                
-                with st.spinner("Checking compliance..."):
-                    results = compliance_checker.check_compliance()
+            with st.spinner("Running compliance check..."):
+                results = compliance_checker.check_compliance()
+                st.session_state['compliance_results'] = results
+            st.success("Compliance check completed.")
 
-                st.session_state.compliance_results = results
+    if 'compliance_results' in st.session_state:
+        st.write("Compliance Check Results:")
+        st.dataframe(st.session_state['compliance_results'])
 
-            except Exception as e:
-                st.error(f"Error during compliance check: {str(e)}")
+        with st.sidebar:
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                st.session_state['compliance_results'].to_excel(writer, index=False, sheet_name='Compliance Results')
+            excel_data = output.getvalue()
 
-    if st.session_state.compliance_results is not None:
-        st.markdown("<div style='text-align: center;'><strong>Compliance Check Matrix</strong></div>", unsafe_allow_html=True)
-        styled_results = st.session_state.compliance_results.style.apply(color_rows, axis=1)
-        st.dataframe(styled_results, use_container_width=True, hide_index=True)
-
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            st.session_state.compliance_results.to_excel(writer, index=False, sheet_name='Compliance Check')
-        excel_data = output.getvalue()
-
-        st.download_button(
-            label="📥 Download Compliance Check Results",
-            data=excel_data,
-            file_name="compliance_check_results.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+            st.download_button(
+                label="📥 Download Compliance Results",
+                data=excel_data,
+                file_name="compliance_results.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
 def color_rows(row):
     color_map = {
