@@ -569,7 +569,6 @@ def color_rows(row):
 
 def main():
     st.set_page_config(page_title="Alemeno",layout="wide")
-    st.sidebar.title('Alemeno')
 
     st.markdown("""<style>div.stButton > button:first-child {    background-color: #252525;    border: 1px solid #353535;}</style>""", unsafe_allow_html=True)
 
