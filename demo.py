@@ -524,102 +524,58 @@ Now, provide your answer based on the given extracted text and question, ensurin
                     st.markdown("Raw response:")
                     st.markdown(response)
 
-def compliance_matrix_tab() -> None:
-    st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>Compliance Check</div>", unsafe_allow_html=True)
+def compliance_matrix_tab():
+    st.write("<div style='text-align: center; font-size: 24px; margin-top: 100px;'>Compliance Check</div>", unsafe_allow_html=True)
 
-    compliance_checker = ComplianceChecker()
+    sotr_matrix = None
+    tender_document = None
 
-    col1, col2 = st.columns(2)
+    if 'processed_df' in st.session_state and st.session_state.processed_df is not None and not st.session_state.processed_df.empty:
+        sotr_matrix = st.session_state.processed_df
+        st.success("SOTR matrix loaded from session state")
+    else:
+        sotr_file = st.file_uploader("Upload SOTR Matrix", type=["xlsx"])
+        if sotr_file is not None:
+            sotr_matrix = pd.read_excel(sotr_file)
+            st.success("SOTR matrix uploaded successfully")
 
-    with col1:
-        if 'final_compliance_matrix' not in st.session_state:
-            final_compliance_matrix = st.file_uploader("Upload Final Compliance Matrix", type=["xlsx"], key="final_compliance_matrix_uploader")
-            if final_compliance_matrix is not None:
-                matrix_content = final_compliance_matrix.read()
-                compliance_checker.load_matrix(matrix_content)
-                st.session_state['final_compliance_matrix'] = matrix_content
-                st.success("Final Compliance Matrix uploaded successfully.")
-        else:
-            st.success("Final Compliance Matrix is already uploaded.")
+    if 'tender_markdown' in st.session_state and st.session_state.tender_markdown:
+        tender_document = st.session_state.tender_markdown
+        st.success("Tender document loaded from session state")
+    else:
+        tender_file = st.file_uploader("Upload Tender Document", type=["pdf"])
+        if tender_file is not None:
+            tender_document = convert_pdf_to_markdown(tender_file.getvalue(), tender_file.name)
+            st.success("Tender document uploaded and converted to markdown successfully")
 
-    with col2:
-        if 'tender_document' not in st.session_state:
-            tender_document = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_document_uploader")
-            if tender_document is not None:
-                tender_content = tender_document.read()
-                compliance_checker.load_tender(tender_content)
-                st.session_state['tender_document'] = tender_content
-                st.success("Tender Document uploaded successfully.")
-        else:
-            st.success("Tender Document is already uploaded.")
-
-    if 'final_compliance_matrix' in st.session_state and 'tender_document' in st.session_state:
+    if sotr_matrix is not None and tender_document is not None:
         if st.button("Run Compliance Check"):
-            try:
-                st.info(f"Debug: Tender document in session state: {st.session_state['tender_document'] is not None}")
-                st.info(f"Debug: Final compliance matrix in session state: {st.session_state['final_compliance_matrix'] is not None}")
-                
-                if compliance_checker.tender_markdown is None:
-                    st.error("Tender document not loaded. Attempting to reload...")
-                    if 'tender_document' in st.session_state:
-                        compliance_checker.load_tender(st.session_state['tender_document'])
-                    
-                    if compliance_checker.tender_markdown is None:
-                        st.error("Failed to reload tender document. Please upload the tender document again.")
-                    else:
-                        st.success("Tender document reloaded successfully.")
-                
-                if compliance_checker.sotr_matrix_content is None:
-                    st.error("SOTR matrix not loaded. Attempting to reload...")
-                    if 'final_compliance_matrix' in st.session_state:
-                        compliance_checker.load_matrix(st.session_state['final_compliance_matrix'])
-                    
-                    if compliance_checker.sotr_matrix_content is None:
-                        st.error("Failed to reload SOTR matrix. Please upload the compliance matrix again.")
-                    else:
-                        st.success("SOTR matrix reloaded successfully.")
-                
-                if compliance_checker.tender_markdown is not None and compliance_checker.sotr_matrix_content is not None:
-                    with st.spinner("Running compliance check..."):
-                        results = compliance_checker.check_compliance()
-                        st.session_state['compliance_results'] = results
-                    st.success("Compliance check completed.")
+            with st.spinner("Running compliance check..."):
+                compliance_checker = ComplianceChecker()
+                if isinstance(sotr_matrix, pd.DataFrame):
+                    buffer = io.BytesIO()
+                    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                        sotr_matrix.to_excel(writer, index=False)
+                    compliance_checker.load_matrix(buffer.getvalue())
+                elif isinstance(sotr_matrix, bytes):
+                    compliance_checker.load_matrix(sotr_matrix)
                 else:
-                    st.error("Cannot run compliance check. Please ensure both documents are properly loaded.")
-            except Exception as e:
-                st.error(f"Error during compliance check: {str(e)}")
-                st.info("Please ensure both the Final Compliance Matrix and Tender Document are properly loaded.")
-                st.info(f"Debug info - Tender markdown: {compliance_checker.tender_markdown is not None}, SOTR matrix: {compliance_checker.sotr_matrix_content is not None}")
-                st.info(f"Tender markdown length: {len(compliance_checker.tender_markdown) if compliance_checker.tender_markdown else 'N/A'}")
-                st.info(f"SOTR matrix shape: {compliance_checker.sotr_matrix_content.shape if compliance_checker.sotr_matrix_content is not None else 'N/A'}")
-                if compliance_checker.tender_markdown:
-                    st.info(f"First 100 characters of tender markdown: {compliance_checker.tender_markdown[:100]}...")
-                if compliance_checker.sotr_matrix_content is not None:
-                    st.info(f"First few rows of SOTR matrix: {compliance_checker.sotr_matrix_content.head().to_string()}")
-                    st.info(f"SOTR matrix columns: {compliance_checker.sotr_matrix_content.columns.tolist()}")
-                    st.info(f"SOTR matrix data types: {compliance_checker.sotr_matrix_content.dtypes}")
-                    
-                    if 'Clause' in compliance_checker.sotr_matrix_content.columns:
-                        st.info(f"Sample of 'Clause' column: {compliance_checker.sotr_matrix_content['Clause'].head().tolist()}")
-                    else:
-                        st.warning("'Clause' column not found in SOTR matrix")
+                    buffer = io.BytesIO()
+                    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                        pd.read_excel(sotr_matrix).to_excel(writer, index=False)
+                    compliance_checker.load_matrix(buffer.getvalue())
+                
+                if isinstance(tender_document, str):
+                    compliance_checker.load_tender(tender_document.encode('utf-8'))
+                elif isinstance(tender_document, bytes):
+                    compliance_checker.load_tender(tender_document)
+                else:
+                    raise ValueError("Unsupported tender document type")
+                
+                compliance_results = compliance_checker.check_compliance()
 
-    if 'compliance_results' in st.session_state:
-        st.write("Compliance Check Results:")
-        st.dataframe(st.session_state['compliance_results'])
-
-        with st.sidebar:
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                st.session_state['compliance_results'].to_excel(writer, index=False, sheet_name='Compliance Results')
-            excel_data = output.getvalue()
-
-            st.download_button(
-                label="📥 Download Compliance Results",
-                data=excel_data,
-                file_name="compliance_results.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+                st.write("Compliance Check Results:")
+                st.dataframe(compliance_results.style.apply(color_rows, axis=1))
 
 def color_rows(row):
     color_map = {
