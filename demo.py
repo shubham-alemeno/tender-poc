@@ -51,84 +51,84 @@ def sotr_document_tab(llm_client) -> None:
         st.session_state.edit_mode = False
         st.session_state.done_editing = False
 
-    with st.sidebar:
-        sotr_file_list = os.listdir('sotr_data')
-        selected_file = st.selectbox('Select existing SOTR file', [''] + sotr_file_list)
+    # with st.sidebar:
+    #     sotr_file_list = os.listdir('sotr_data')
+    #     selected_file = st.selectbox('Select existing SOTR file', [''] + sotr_file_list)
         
-        if selected_file and selected_file != st.session_state.last_uploaded_file:
-            file_path = os.path.join('sotr_data', selected_file)
-            try:
-                st.session_state.processed_df = pd.read_excel(file_path)
-                st.session_state.sotr_processed = True
-                st.session_state.last_uploaded_file = selected_file
-                st.session_state.edit_mode = False
-                st.session_state.done_editing = False
-            except Exception as e:
-                st.error(f"Error reading selected file: {str(e)}")
+    #     if selected_file and selected_file != st.session_state.last_uploaded_file:
+    #         file_path = os.path.join('sotr_data', selected_file)
+    #         try:
+    #             st.session_state.processed_df = pd.read_excel(file_path)
+    #             st.session_state.sotr_processed = True
+    #             st.session_state.last_uploaded_file = selected_file
+    #             st.session_state.edit_mode = False
+    #             st.session_state.done_editing = False
+    #         except Exception as e:
+    #             st.error(f"Error reading selected file: {str(e)}")
         
-        st.write("OR")
+    #     st.write("OR")
         
-        sotr_file = st.file_uploader("Upload new SOTR Document", type=["pdf", "xlsx"])
+    #     sotr_file = st.file_uploader("Upload new SOTR Document", type=["pdf", "xlsx"])
 
-        if sotr_file is not None and sotr_file != st.session_state.last_uploaded_file:
-            st.session_state.sotr_processed = False
-            st.session_state.last_uploaded_file = sotr_file
-            st.session_state.edit_mode = False
-            st.session_state.done_editing = False
+    #     if sotr_file is not None and sotr_file != st.session_state.last_uploaded_file:
+    #         st.session_state.sotr_processed = False
+    #         st.session_state.last_uploaded_file = sotr_file
+    #         st.session_state.edit_mode = False
+    #         st.session_state.done_editing = False
         
-        st.subheader("Final Compliance Matrix")
-        final_compliance_matrix = st.file_uploader("Upload Final Compliance Matrix", type=["xlsx"])
+    #     st.subheader("Final Compliance Matrix")
+    #     final_compliance_matrix = st.file_uploader("Upload Final Compliance Matrix", type=["xlsx"])
         
-        if final_compliance_matrix is not None:
-            st.session_state.final_compliance_matrix = pd.read_excel(final_compliance_matrix)
-            st.success("Final Compliance Matrix uploaded successfully")
+    #     if final_compliance_matrix is not None:
+    #         st.session_state.final_compliance_matrix = pd.read_excel(final_compliance_matrix)
+    #         st.success("Final Compliance Matrix uploaded successfully")
 
-        if sotr_file is not None and not st.session_state.sotr_processed:
-            try:
-                progress_text = "Processing SOTR document. Please wait."
-                my_bar = st.progress(0, text=progress_text)
+    #     if sotr_file is not None and not st.session_state.sotr_processed:
+    #         try:
+    #             progress_text = "Processing SOTR document. Please wait."
+    #             my_bar = st.progress(0, text=progress_text)
 
-                file_content = sotr_file.read()
-                file_id = f"sotr_{sotr_file.name}"
+    #             file_content = sotr_file.read()
+    #             file_id = f"sotr_{sotr_file.name}"
 
-                if sotr_file.type == "application/pdf":
-                    sotr = SOTRMarkdown(llm_client=llm_client)
+    #             if sotr_file.type == "application/pdf":
+    #                 sotr = SOTRMarkdown(llm_client=llm_client)
                     
-                    time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
-                    estimated_pages = len(file_content) // 10000
-                    ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
+    #                 time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
+    #                 estimated_pages = len(file_content) // 10000
+    #                 ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
                     
-                    with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):        
-                        my_bar.progress(15, text=progress_text)
-                        sotr.load_from_pdf(file_content, file_id)
-                        my_bar.progress(50, text=progress_text)
+    #                 with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):        
+    #                     my_bar.progress(15, text=progress_text)
+    #                     sotr.load_from_pdf(file_content, file_id)
+    #                     my_bar.progress(50, text=progress_text)
                         
-                        try:
-                            df, split_text = sotr.get_matrix_points()
-                            if df.empty:
-                                st.warning("No data was extracted from the document. Please check the content and try again.")
-                            else:
-                                my_bar.progress(75, text=progress_text)
-                                st.session_state.processed_df = df
-                                st.session_state.sotr_processed = True
-                                my_bar.progress(100, text="Processing complete!")
-                        except Exception as e:
-                            st.error(f"Error in get_matrix_points: {str(e)}")
-                            st.write(f"Exception type: {type(e).__name__}")
-                            st.write(f"Exception details: {e.__dict__}")
-                            st.write(f"Traceback: {traceback.format_exc()}")
-                            st.warning("Processing completed with errors. Some sections may have been skipped.")
+    #                     try:
+    #                         df, split_text = sotr.get_matrix_points()
+    #                         if df.empty:
+    #                             st.warning("No data was extracted from the document. Please check the content and try again.")
+    #                         else:
+    #                             my_bar.progress(75, text=progress_text)
+    #                             st.session_state.processed_df = df
+    #                             st.session_state.sotr_processed = True
+    #                             my_bar.progress(100, text="Processing complete!")
+    #                     except Exception as e:
+    #                         st.error(f"Error in get_matrix_points: {str(e)}")
+    #                         st.write(f"Exception type: {type(e).__name__}")
+    #                         st.write(f"Exception details: {e.__dict__}")
+    #                         st.write(f"Traceback: {traceback.format_exc()}")
+    #                         st.warning("Processing completed with errors. Some sections may have been skipped.")
                 
-                elif sotr_file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-                    st.session_state.processed_df = pd.read_excel(sotr_file)
-                    st.session_state.sotr_processed = True
-                    my_bar.progress(100, text="Processing complete!")
+    #             elif sotr_file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+    #                 st.session_state.processed_df = pd.read_excel(sotr_file)
+    #                 st.session_state.sotr_processed = True
+    #                 my_bar.progress(100, text="Processing complete!")
                 
-            except Exception as e:
-                st.error(f"Error processing SOTR document: {str(e)}")
-                st.write(f"Exception type: {type(e).__name__}")
-                st.write(f"Exception details: {e.__dict__}")
-                st.write(f"Traceback: {traceback.format_exc()}")
+    #         except Exception as e:
+    #             st.error(f"Error processing SOTR document: {str(e)}")
+    #             st.write(f"Exception type: {type(e).__name__}")
+    #             st.write(f"Exception details: {e.__dict__}")
+    #             st.write(f"Traceback: {traceback.format_exc()}")
     
     if not st.session_state.sotr_processed:
         st.markdown(
@@ -149,15 +149,33 @@ def sotr_document_tab(llm_client) -> None:
                 sotr_file = st.file_uploader("Upload new SOTR Document", type=["pdf", "xlsx"], key="sotr_file_upload")
                 if sotr_file:
                     try:
+                        progress_text = "Processing SOTR document. Please wait."
+                        my_bar = st.progress(0, text=progress_text)
+
                         if sotr_file.type == "application/pdf":
                             sotr = SOTRMarkdown(llm_client=llm_client)
                             file_content = sotr_file.read()
                             file_id = f"sotr_{sotr_file.name}"
-                            sotr.load_from_pdf(file_content, file_id)
-                            df, _ = sotr.get_matrix_points()
-                            st.session_state.processed_df = df
+
+                            time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
+                            estimated_pages = len(file_content) // 10000
+                            ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
+                            
+                            with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):        
+                                my_bar.progress(15, text=progress_text)
+                                sotr.load_from_pdf(file_content, file_id)
+                                my_bar.progress(50, text=progress_text)
+                                
+                                df, _ = sotr.get_matrix_points()
+                                if df.empty:
+                                    st.warning("No data was extracted from the document. Please check the content and try again.")
+                                else:
+                                    my_bar.progress(75, text=progress_text)
+                                    st.session_state.processed_df = df
+                                    my_bar.progress(100, text="Processing complete!")
                         elif sotr_file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
                             st.session_state.processed_df = pd.read_excel(sotr_file)
+                            my_bar.progress(100, text="Processing complete!")
                         
                         st.session_state.sotr_processed = True
                         st.session_state.last_uploaded_file = sotr_file
@@ -169,6 +187,7 @@ def sotr_document_tab(llm_client) -> None:
                         st.error(f"Error processing file: {str(e)}")
 
             sotr_dialog()
+
         st.button("② Open & Edit Compliance Matrix", disabled=True)
         
         if st.button("③ Finalize Compliance Matrix"):
@@ -266,7 +285,6 @@ def sotr_document_tab(llm_client) -> None:
             st.button("❷ Open & Edit Compliance Matrix ✔", disabled=True)
             st.button("❸ Finalize Compliance Matrix ✔", disabled=True)
 
-            # Automatically save the result
             current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
             save_filename = f"sotr_matrix_{current_time}.xlsx"
             save_path = os.path.join('sotr_data', save_filename)
@@ -281,13 +299,13 @@ def sotr_document_tab(llm_client) -> None:
             st.session_state.processed_df.to_excel(writer, index=False, sheet_name='Sheet1')
         excel_data = output.getvalue()
         
-        with st.sidebar:
-            st.download_button(
-                label="📥 Download SOTR Matrix",
-                data=excel_data,
-                file_name="sotr_matrix.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        # with st.sidebar:
+        #     st.download_button(
+        #         label="📥 Download SOTR Matrix",
+        #         data=excel_data,
+        #         file_name="sotr_matrix.xlsx",
+        #         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        #     )
 
 @st.fragment
 def sotr_chat_container(llm_client):
@@ -352,24 +370,23 @@ def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
             st.warning(f"Could not delete temporary file: {str(e)}")
 
 def tender_qa_tab(llm_client) -> None:
-    tender_files = [f for f in os.listdir('tender_data') if os.path.isfile(os.path.join('tender_data', f))]
+    # tender_files = [f for f in os.listdir('tender_data') if os.path.isfile(os.path.join('tender_data', f))]
     uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
-    st.markdown("<div style='text-align: center; margin: 10px 0;'>OR</div>", unsafe_allow_html=True)
-    selected_tenders = st.multiselect("Select Processed Tender", options=tender_files, key="selected_tenders")
+    # st.markdown("<div style='text-align: center; margin: 10px 0;'>OR</div>", unsafe_allow_html=True)
+    # selected_tenders = st.multiselect("Select Processed Tender", options=tender_files, key="selected_tenders")
     st.session_state["pdf_processed"] = False
     tender_in_markdown_format = None
     
-    if selected_tenders:
-        tender_in_markdown_format = ""
-        for tender_file in selected_tenders:
-            with open(os.path.join('tender_data', tender_file), 'r') as f:
-                tender_in_markdown_format += f.read() + "\n\n"
-        st.session_state["pdf_processed"] = True
+    # if selected_tenders:
+    #     tender_in_markdown_format = ""
+    #     for tender_file in selected_tenders:
+    #         with open(os.path.join('tender_data', tender_file), 'r') as f:
+    #             tender_in_markdown_format += f.read() + "\n\n"
+    #     st.session_state["pdf_processed"] = True
     
-    elif uploaded_file is not None:
+    if uploaded_file is not None:
         st.session_state["tender_document"] = uploaded_file
         st.session_state["pdf_processed"] = False
-        st.success("Tender Document uploaded successfully")
         try:
             file_content = uploaded_file.getvalue()
             time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
