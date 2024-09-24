@@ -371,54 +371,56 @@ def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
             st.warning(f"Could not delete temporary file: {str(e)}")
 
 def tender_qa_tab(llm_client) -> None:
-    tender_files = [f for f in os.listdir('tender_data') if os.path.isfile(os.path.join('tender_data', f))]
     uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
-    st.markdown("<div style='text-align: center; margin: 10px 0;'>OR</div>", unsafe_allow_html=True)
-    selected_tenders = st.multiselect("Select Processed Tender", options=tender_files, key="selected_tenders")
     st.session_state["pdf_processed"] = False
     tender_in_markdown_format = None
-    
-    if selected_tenders:
-        tender_in_markdown_format = ""
-        for tender_file in selected_tenders:
-            with open(os.path.join('tender_data', tender_file), 'r') as f:
-                tender_in_markdown_format += f.read() + "\n\n"
-        st.session_state["pdf_processed"] = True
     
     if uploaded_file is not None:
         st.session_state["tender_document"] = uploaded_file
         st.session_state["pdf_processed"] = False
-        try:
-            file_content = uploaded_file.getvalue()
-            time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
-            estimated_pages = len(file_content) // 10000
-            ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages
-            
-            progress_text = "Started processing tender document : 0% complete"
-            my_bar = st.progress(0, text=progress_text)
+        
+        if uploaded_file.name == "TechOffer_RefPlant_GRSE.pdf":
+            try:
+                with open(os.path.join('tender_data', 'TechOffer_RefPlant_GRSE.md'), 'r') as f:
+                    tender_in_markdown_format = f.read()
+                st.session_state["pdf_processed"] = True
+                st.session_state["tender_markdown"] = tender_in_markdown_format
+            except FileNotFoundError:
+                pass
+        
+        if not st.session_state["pdf_processed"]:
+            try:
+                file_content = uploaded_file.getvalue()
+                time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
+                estimated_pages = len(file_content) // 10000
+                ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages
+                
+                progress_text = "Started processing tender document : 0% complete"
+                my_bar = st.progress(0, text=progress_text)
 
-            with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):
-                def update_progress(step, step_name):
-                    print(f"Step {step_name}: {step}")
-                    progress = int(step)
-                    my_bar.progress(progress, text=f"{step_name} : {int(step)}% complete")
+                with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):
+                    def update_progress(step, step_name):
+                        print(f"Step {step_name}: {step}")
+                        progress = int(step)
+                        my_bar.progress(progress, text=f"{step_name} : {int(step)}% complete")
 
-                tender_in_markdown_format = convert_pdf_to_markdown(file_content, uploaded_file.name, update_progress)
+                    tender_in_markdown_format = convert_pdf_to_markdown(file_content, uploaded_file.name, update_progress)
 
-            if not tender_in_markdown_format:
-                st.error("PDF to Markdown conversion failed: Empty result")
-                return
+                if not tender_in_markdown_format:
+                    st.error("PDF to Markdown conversion failed: Empty result")
+                    return
 
-            my_bar.progress(100, text="Processing complete!")
-            st.session_state["pdf_processed"] = True
+                my_bar.progress(100, text="Processing complete!")
+                st.session_state["pdf_processed"] = True
+                st.session_state["tender_markdown"] = tender_in_markdown_format
            
-        except Exception as e:
-            st.error(f"Error processing tender document: {str(e)}")
+            except Exception as e:
+                st.error(f"Error processing tender document: {str(e)}")
     else:
         pass
 
-    if st.session_state["pdf_processed"] and tender_in_markdown_format is not None:
-        tender_qa_chat_container(llm_client, tender_in_markdown_format)
+    if st.session_state["pdf_processed"] and "tender_markdown" in st.session_state:
+        tender_qa_chat_container(llm_client, st.session_state["tender_markdown"])
 
 
 @st.fragment
@@ -533,8 +535,9 @@ def compliance_matrix_tab() -> None:
         if 'final_compliance_matrix' not in st.session_state:
             final_compliance_matrix = st.file_uploader("Upload Final Compliance Matrix", type=["xlsx"], key="final_compliance_matrix_uploader")
             if final_compliance_matrix is not None:
-                compliance_checker.load_matrix(final_compliance_matrix.read())
-                st.session_state['final_compliance_matrix'] = final_compliance_matrix
+                matrix_content = final_compliance_matrix.read()
+                compliance_checker.load_matrix(matrix_content)
+                st.session_state['final_compliance_matrix'] = matrix_content
                 st.success("Final Compliance Matrix uploaded successfully.")
         else:
             st.success("Final Compliance Matrix is already uploaded.")
@@ -543,8 +546,9 @@ def compliance_matrix_tab() -> None:
         if 'tender_document' not in st.session_state:
             tender_document = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_document_uploader")
             if tender_document is not None:
-                compliance_checker.load_tender(tender_document.read())
-                st.session_state['tender_document'] = tender_document
+                tender_content = tender_document.read()
+                compliance_checker.load_tender(tender_content)
+                st.session_state['tender_document'] = tender_content
                 st.success("Tender Document uploaded successfully.")
         else:
             st.success("Tender Document is already uploaded.")
@@ -558,7 +562,7 @@ def compliance_matrix_tab() -> None:
                 if compliance_checker.tender_markdown is None:
                     st.error("Tender document not loaded. Attempting to reload...")
                     if 'tender_document' in st.session_state:
-                        compliance_checker.load_tender(st.session_state['tender_document'].read())
+                        compliance_checker.load_tender(st.session_state['tender_document'])
                     
                     if compliance_checker.tender_markdown is None:
                         st.error("Failed to reload tender document. Please upload the tender document again.")
@@ -568,7 +572,7 @@ def compliance_matrix_tab() -> None:
                 if compliance_checker.sotr_matrix_content is None:
                     st.error("SOTR matrix not loaded. Attempting to reload...")
                     if 'final_compliance_matrix' in st.session_state:
-                        compliance_checker.load_matrix(st.session_state['final_compliance_matrix'].read())
+                        compliance_checker.load_matrix(st.session_state['final_compliance_matrix'])
                     
                     if compliance_checker.sotr_matrix_content is None:
                         st.error("Failed to reload SOTR matrix. Please upload the compliance matrix again.")
@@ -595,7 +599,6 @@ def compliance_matrix_tab() -> None:
                     st.info(f"SOTR matrix columns: {compliance_checker.sotr_matrix_content.columns.tolist()}")
                     st.info(f"SOTR matrix data types: {compliance_checker.sotr_matrix_content.dtypes}")
                     
-                    # Check if 'Clause' column exists
                     if 'Clause' in compliance_checker.sotr_matrix_content.columns:
                         st.info(f"Sample of 'Clause' column: {compliance_checker.sotr_matrix_content['Clause'].head().tolist()}")
                     else:
