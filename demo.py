@@ -131,26 +131,123 @@ def sotr_document_tab(llm_client) -> None:
                 st.write(f"Traceback: {traceback.format_exc()}")
     
     if not st.session_state.sotr_processed:
-        st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>① Select or Upload SOTR</div>", unsafe_allow_html=True)
-        st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>② Open & Edit Compliance Matrix</div>", unsafe_allow_html=True)
-        st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>③ Finalize Compliance Matrix</div>", unsafe_allow_html=True)
+        st.markdown(
+                """
+                <style>
+                    .stButton {
+                        display: flex;
+                        justify-content: center;
+                    }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
+        if st.button("① Select or Upload SOTR"):
+            @st.dialog("Select or Upload SOTR")
+            def sotr_dialog():
+                st.write("Choose an option to load SOTR document:")
+                sotr_file = st.file_uploader("Upload new SOTR Document", type=["pdf", "xlsx"], key="sotr_file_upload")
+                if sotr_file:
+                    try:
+                        if sotr_file.type == "application/pdf":
+                            sotr = SOTRMarkdown(llm_client=llm_client)
+                            file_content = sotr_file.read()
+                            file_id = f"sotr_{sotr_file.name}"
+                            sotr.load_from_pdf(file_content, file_id)
+                            df, _ = sotr.get_matrix_points()
+                            st.session_state.processed_df = df
+                        elif sotr_file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+                            st.session_state.processed_df = pd.read_excel(sotr_file)
+                        
+                        st.session_state.sotr_processed = True
+                        st.session_state.last_uploaded_file = sotr_file
+                        st.session_state.edit_mode = False
+                        st.session_state.done_editing = False
+                        st.success("File uploaded and processed successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error processing file: {str(e)}")
+
+            sotr_dialog()
+        st.button("② Open & Edit Compliance Matrix", disabled=True)
+        
+        if st.button("③ Finalize Compliance Matrix"):
+            @st.dialog("Finalize Compliance Matrix")
+            def finalize_dialog():
+                st.write("Upload the Final Compliance Matrix")
+                final_compliance_matrix = st.file_uploader("Upload Final Compliance Matrix", type=["xlsx"], key="final_compliance_matrix_upload")
+                if final_compliance_matrix is not None:
+                    try:
+                        st.session_state.final_compliance_matrix = pd.read_excel(final_compliance_matrix)
+                        if st.session_state.final_compliance_matrix is not None:
+                            st.session_state.processed_df = st.session_state.final_compliance_matrix
+                        st.session_state.sotr_processed = True
+                        st.session_state.done_editing = True
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error reading Final Compliance Matrix: {str(e)}")
+            finalize_dialog()
+
     
     elif st.session_state.sotr_processed:
-        st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px; margin-bottom: 40px;'>❶ Select or Upload SOTR ✔</div>", unsafe_allow_html=True)
+        st.markdown(
+                """
+                <style>
+                    .stButton {
+                        display: flex;
+                        justify-content: center;
+                    }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
+        st.button("❶ Select or Upload SOTR ✔", disabled=True)
         
         if not st.session_state.done_editing:
-            left, middle, right = st.columns([1, 2, 1])
+            st.markdown(
+                """
+                <style>
+                    .stButton {
+                        display: flex;
+                        justify-content: center;
+                    }
+                    .stDownloadButton {
+                        display: flex;
+                        justify-content: center;
+                    }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
             
-            with middle:
-                st.write("<div style='text-align: center; font-size: 24px; margin-bottom: 20px;'>② Open & Edit Compliance Matrix</div>", unsafe_allow_html=True)
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                st.session_state.processed_df.to_excel(writer, index=False, sheet_name='Sheet1')
+            excel_data = output.getvalue()
+            if not st.session_state.get('step_2_complete'):
+                if st.download_button("② Open Compliance Matrix", excel_data, file_name="compliance_matrix.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"):
+                    st.session_state.step_2_complete = True
+                    st.rerun()
+            else:
+                st.button("❷ Open & Edit Compliance Matrix ✔", disabled=True)
             
-            with right:
-                st.write("<div style='text-align: right; margin-top: 5px;'>", unsafe_allow_html=True)
-                if st.button("Edit Compliance Matrix", key="edit_matrix_button"):
-                    st.session_state.edit_mode = not st.session_state.edit_mode
-                st.write("</div>", unsafe_allow_html=True)
 
-            st.write("<div style='text-align: center; font-size: 24px; margin-top: 60px;'>③ Finalize Compliance Matrix</div>", unsafe_allow_html=True)
+            if st.button("③ Finalize Compliance Matrix"):
+                @st.dialog("Finalize Compliance Matrix")
+                def finalize_dialog():
+                    st.write("Upload the Final Compliance Matrix")
+                    final_compliance_matrix = st.file_uploader("Upload Final Compliance Matrix", type=["xlsx"], key="final_compliance_matrix_upload")
+                    if final_compliance_matrix is not None:
+                        try:
+                            st.session_state.final_compliance_matrix = pd.read_excel(final_compliance_matrix)
+                            if st.session_state.final_compliance_matrix is not None:
+                                st.session_state.processed_df = st.session_state.final_compliance_matrix
+                            st.session_state.sotr_processed = True
+                            st.session_state.done_editing = True
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error reading Final Compliance Matrix: {str(e)}")
+                finalize_dialog()
 
             if st.session_state.edit_mode:
                 st.markdown("<div style='display: flex; justify-content: center; margin-top: 40px;'>", unsafe_allow_html=True)
@@ -166,8 +263,8 @@ def sotr_document_tab(llm_client) -> None:
                 
         
         else:
-            st.write("<div style='text-align: center; font-size: 24px; margin-top: 40px;'>❷ Open & Edit Compliance Matrix ✔</div>", unsafe_allow_html=True)
-            st.write("<div style='text-align: center; font-size: 24px; margin-top: 40px;'>❸ Finalize Compliance Matrix ✔</div>", unsafe_allow_html=True)
+            st.button("❷ Open & Edit Compliance Matrix ✔", disabled=True)
+            st.button("❸ Finalize Compliance Matrix ✔", disabled=True)
 
             # Automatically save the result
             current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -377,10 +474,55 @@ def compliance_matrix_tab() -> None:
 
     if 'final_compliance_matrix' in st.session_state and 'tender_document' in st.session_state:
         if st.button("Run Compliance Check"):
-            with st.spinner("Running compliance check..."):
-                results = compliance_checker.check_compliance()
-                st.session_state['compliance_results'] = results
-            st.success("Compliance check completed.")
+            try:
+                st.info(f"Debug: Tender document in session state: {st.session_state['tender_document'] is not None}")
+                st.info(f"Debug: Final compliance matrix in session state: {st.session_state['final_compliance_matrix'] is not None}")
+                
+                if compliance_checker.tender_markdown is None:
+                    st.error("Tender document not loaded. Attempting to reload...")
+                    if 'tender_document' in st.session_state:
+                        compliance_checker.load_tender(st.session_state['tender_document'].read())
+                    
+                    if compliance_checker.tender_markdown is None:
+                        st.error("Failed to reload tender document. Please upload the tender document again.")
+                    else:
+                        st.success("Tender document reloaded successfully.")
+                
+                if compliance_checker.sotr_matrix_content is None:
+                    st.error("SOTR matrix not loaded. Attempting to reload...")
+                    if 'final_compliance_matrix' in st.session_state:
+                        compliance_checker.load_matrix(st.session_state['final_compliance_matrix'].read())
+                    
+                    if compliance_checker.sotr_matrix_content is None:
+                        st.error("Failed to reload SOTR matrix. Please upload the compliance matrix again.")
+                    else:
+                        st.success("SOTR matrix reloaded successfully.")
+                
+                if compliance_checker.tender_markdown is not None and compliance_checker.sotr_matrix_content is not None:
+                    with st.spinner("Running compliance check..."):
+                        results = compliance_checker.check_compliance()
+                        st.session_state['compliance_results'] = results
+                    st.success("Compliance check completed.")
+                else:
+                    st.error("Cannot run compliance check. Please ensure both documents are properly loaded.")
+            except Exception as e:
+                st.error(f"Error during compliance check: {str(e)}")
+                st.info("Please ensure both the Final Compliance Matrix and Tender Document are properly loaded.")
+                st.info(f"Debug info - Tender markdown: {compliance_checker.tender_markdown is not None}, SOTR matrix: {compliance_checker.sotr_matrix_content is not None}")
+                st.info(f"Tender markdown length: {len(compliance_checker.tender_markdown) if compliance_checker.tender_markdown else 'N/A'}")
+                st.info(f"SOTR matrix shape: {compliance_checker.sotr_matrix_content.shape if compliance_checker.sotr_matrix_content is not None else 'N/A'}")
+                if compliance_checker.tender_markdown:
+                    st.info(f"First 100 characters of tender markdown: {compliance_checker.tender_markdown[:100]}...")
+                if compliance_checker.sotr_matrix_content is not None:
+                    st.info(f"First few rows of SOTR matrix: {compliance_checker.sotr_matrix_content.head().to_string()}")
+                    st.info(f"SOTR matrix columns: {compliance_checker.sotr_matrix_content.columns.tolist()}")
+                    st.info(f"SOTR matrix data types: {compliance_checker.sotr_matrix_content.dtypes}")
+                    
+                    # Check if 'Clause' column exists
+                    if 'Clause' in compliance_checker.sotr_matrix_content.columns:
+                        st.info(f"Sample of 'Clause' column: {compliance_checker.sotr_matrix_content['Clause'].head().tolist()}")
+                    else:
+                        st.warning("'Clause' column not found in SOTR matrix")
 
     if 'compliance_results' in st.session_state:
         st.write("Compliance Check Results:")
