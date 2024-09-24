@@ -12,6 +12,7 @@ import gc
 from dotenv import load_dotenv
 import traceback
 from datetime import datetime
+import json
 
 load_dotenv()
 
@@ -370,19 +371,19 @@ def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
             st.warning(f"Could not delete temporary file: {str(e)}")
 
 def tender_qa_tab(llm_client) -> None:
-    # tender_files = [f for f in os.listdir('tender_data') if os.path.isfile(os.path.join('tender_data', f))]
+    tender_files = [f for f in os.listdir('tender_data') if os.path.isfile(os.path.join('tender_data', f))]
     uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
-    # st.markdown("<div style='text-align: center; margin: 10px 0;'>OR</div>", unsafe_allow_html=True)
-    # selected_tenders = st.multiselect("Select Processed Tender", options=tender_files, key="selected_tenders")
+    st.markdown("<div style='text-align: center; margin: 10px 0;'>OR</div>", unsafe_allow_html=True)
+    selected_tenders = st.multiselect("Select Processed Tender", options=tender_files, key="selected_tenders")
     st.session_state["pdf_processed"] = False
     tender_in_markdown_format = None
     
-    # if selected_tenders:
-    #     tender_in_markdown_format = ""
-    #     for tender_file in selected_tenders:
-    #         with open(os.path.join('tender_data', tender_file), 'r') as f:
-    #             tender_in_markdown_format += f.read() + "\n\n"
-    #     st.session_state["pdf_processed"] = True
+    if selected_tenders:
+        tender_in_markdown_format = ""
+        for tender_file in selected_tenders:
+            with open(os.path.join('tender_data', tender_file), 'r') as f:
+                tender_in_markdown_format += f.read() + "\n\n"
+        st.session_state["pdf_processed"] = True
     
     if uploaded_file is not None:
         st.session_state["tender_document"] = uploaded_file
@@ -435,6 +436,22 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
         .stChatInput {
             flex-wrap: nowrap;
         }
+        .json-response {
+            background-color: rgba(38, 39, 48, 0.5);
+            border-radius: 0.5rem;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .json-key {
+            color: rgb(255, 108, 108);
+            font-weight: bold;
+        }
+        .json-value {
+            color: rgb(250, 250, 250);
+        }
+        .json-list {
+            margin-left: 20px;
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -454,13 +471,56 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
 
         with st.spinner("Answering..."):
             response = llm_client.call_llm(
-                system_prompt=f"You are a helpful assistant. Use the following tender document to answer questions:\n\n{markdown_text}",
+                system_prompt=f"""You are an AI assistant specialized in analyzing tender documents. Your task is to answer questions based on the extracted text from a tender document. Follow these instructions carefully:
+
+1. Analyze the provided extracted text from the tender document.
+2. Answer the given question based solely on the information in the extracted text.
+3. Provide your response in a JSON format with the following structure:
+   {{
+     "answer": "Your concise answer to the question",
+     "references": ["List of exact text quotes from the document used to form the answer"],
+     "reasoning": "Your step-by-step reasoning for the answer based on the extracted text references"
+   }}
+4. Ensure that your answer is directly supported by the text in the document.
+5. If the question cannot be answered based on the provided text, state this in the "answer" field and explain why in the "reasoning" field.
+6. Use the "references" array to list all relevant quotes from the document that support your answer. Each quote should be an exact match to the text in the document.
+7. In the "reasoning" field, explain how you arrived at your answer using the references provided.
+8. Your response must be a valid JSON object and nothing else. Do not include any text outside of the JSON structure.
+
+The following is the extracted text from the tender document:
+
+{markdown_text}
+
+Now, provide your answer based on the given extracted text and question, ensuring it is in the correct JSON format.""",
                 user_prompt=prompt
             )
 
             st.session_state["history"].append({"role": "assistant", "content": response})
             with st.chat_message("assistant"):
-                st.markdown(response)
+                try:
+                    # Find the start of the JSON object
+                    json_start = response.find('{')
+                    if json_start == -1:
+                        raise ValueError("No JSON object found in the response")
+                    
+                    # Extract the JSON part of the response
+                    json_response = json.loads(response[json_start:])
+                    
+                    st.markdown("<div class='json-response' style='background-color: rgba(38, 39, 48, 0.5); padding: 10px; border-radius: 5px;'>", unsafe_allow_html=True)
+                    st.markdown("<span class='json-key'>Answer:</span>", unsafe_allow_html=True)
+                    st.markdown(f"<span class='json-value'>{json_response['answer']}</span>", unsafe_allow_html=True)
+                    
+                    st.markdown("<span class='json-key'>References:</span>", unsafe_allow_html=True)
+                    for ref in json_response["references"]:
+                        st.code(ref, language="text")
+                    
+                    st.markdown("<span class='json-key'>Reasoning:</span>", unsafe_allow_html=True)
+                    st.markdown(f"<span class='json-value'>{json_response['reasoning']}</span>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+                except (json.JSONDecodeError, ValueError) as e:
+                    st.error(f"Error processing response: {str(e)}")
+                    st.markdown("Raw response:")
+                    st.markdown(response)
 
 def compliance_matrix_tab() -> None:
     st.write("<div style='text-align: center; font-size: 24px; margin-top: 20px;'>Compliance Check</div>", unsafe_allow_html=True)

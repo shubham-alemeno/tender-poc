@@ -37,6 +37,9 @@ from functools import lru_cache
 import tempfile
 import time
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 @lru_cache(maxsize=1)
 def get_marker_models():
@@ -59,7 +62,7 @@ class PDFMarkdown:
             temp_file_path = temp_file.name
 
         try:
-            full_text, doc_images, out_meta = self.convert_single_pdf(fname=temp_file_path, batch_multiplier=3,model_lst=model_lst)
+            full_text, doc_images, out_meta = self.convert_single_pdf(fname=temp_file_path, batch_multiplier=int(os.getenv('BATCH_MULTIPLIER', 3)),model_lst=model_lst)
             self.markdown_text = full_text
             return self.markdown_text
         finally:
