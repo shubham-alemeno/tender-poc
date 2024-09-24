@@ -51,85 +51,6 @@ def sotr_document_tab(llm_client) -> None:
         st.session_state.last_uploaded_file = None
         st.session_state.edit_mode = False
         st.session_state.done_editing = False
-
-    # with st.sidebar:
-    #     sotr_file_list = os.listdir('sotr_data')
-    #     selected_file = st.selectbox('Select existing SOTR file', [''] + sotr_file_list)
-        
-    #     if selected_file and selected_file != st.session_state.last_uploaded_file:
-    #         file_path = os.path.join('sotr_data', selected_file)
-    #         try:
-    #             st.session_state.processed_df = pd.read_excel(file_path)
-    #             st.session_state.sotr_processed = True
-    #             st.session_state.last_uploaded_file = selected_file
-    #             st.session_state.edit_mode = False
-    #             st.session_state.done_editing = False
-    #         except Exception as e:
-    #             st.error(f"Error reading selected file: {str(e)}")
-        
-    #     st.write("OR")
-        
-    #     sotr_file = st.file_uploader("Upload new SOTR Document", type=["pdf", "xlsx"])
-
-    #     if sotr_file is not None and sotr_file != st.session_state.last_uploaded_file:
-    #         st.session_state.sotr_processed = False
-    #         st.session_state.last_uploaded_file = sotr_file
-    #         st.session_state.edit_mode = False
-    #         st.session_state.done_editing = False
-        
-    #     st.subheader("Final Compliance Matrix")
-    #     final_compliance_matrix = st.file_uploader("Upload Final Compliance Matrix", type=["xlsx"])
-        
-    #     if final_compliance_matrix is not None:
-    #         st.session_state.final_compliance_matrix = pd.read_excel(final_compliance_matrix)
-    #         st.success("Final Compliance Matrix uploaded successfully")
-
-    #     if sotr_file is not None and not st.session_state.sotr_processed:
-    #         try:
-    #             progress_text = "Processing SOTR document. Please wait."
-    #             my_bar = st.progress(0, text=progress_text)
-
-    #             file_content = sotr_file.read()
-    #             file_id = f"sotr_{sotr_file.name}"
-
-    #             if sotr_file.type == "application/pdf":
-    #                 sotr = SOTRMarkdown(llm_client=llm_client)
-                    
-    #                 time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
-    #                 estimated_pages = len(file_content) // 10000
-    #                 ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
-                    
-    #                 with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):        
-    #                     my_bar.progress(15, text=progress_text)
-    #                     sotr.load_from_pdf(file_content, file_id)
-    #                     my_bar.progress(50, text=progress_text)
-                        
-    #                     try:
-    #                         df, split_text = sotr.get_matrix_points()
-    #                         if df.empty:
-    #                             st.warning("No data was extracted from the document. Please check the content and try again.")
-    #                         else:
-    #                             my_bar.progress(75, text=progress_text)
-    #                             st.session_state.processed_df = df
-    #                             st.session_state.sotr_processed = True
-    #                             my_bar.progress(100, text="Processing complete!")
-    #                     except Exception as e:
-    #                         st.error(f"Error in get_matrix_points: {str(e)}")
-    #                         st.write(f"Exception type: {type(e).__name__}")
-    #                         st.write(f"Exception details: {e.__dict__}")
-    #                         st.write(f"Traceback: {traceback.format_exc()}")
-    #                         st.warning("Processing completed with errors. Some sections may have been skipped.")
-                
-    #             elif sotr_file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-    #                 st.session_state.processed_df = pd.read_excel(sotr_file)
-    #                 st.session_state.sotr_processed = True
-    #                 my_bar.progress(100, text="Processing complete!")
-                
-    #         except Exception as e:
-    #             st.error(f"Error processing SOTR document: {str(e)}")
-    #             st.write(f"Exception type: {type(e).__name__}")
-    #             st.write(f"Exception details: {e.__dict__}")
-    #             st.write(f"Traceback: {traceback.format_exc()}")
     
     if not st.session_state.sotr_processed:
         st.markdown(
@@ -153,27 +74,16 @@ def sotr_document_tab(llm_client) -> None:
                         progress_text = "Processing SOTR document. Please wait."
                         my_bar = st.progress(0, text=progress_text)
 
-                        if sotr_file.type == "application/pdf":
-                            sotr = SOTRMarkdown(llm_client=llm_client)
-                            file_content = sotr_file.read()
-                            file_id = f"sotr_{sotr_file.name}"
-
-                            time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
-                            estimated_pages = len(file_content) // 10000
-                            ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
-                            
-                            with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):        
-                                my_bar.progress(15, text=progress_text)
-                                sotr.load_from_pdf(file_content, file_id)
-                                my_bar.progress(50, text=progress_text)
-                                
-                                df, _ = sotr.get_matrix_points()
-                                if df.empty:
-                                    st.warning("No data was extracted from the document. Please check the content and try again.")
-                                else:
-                                    my_bar.progress(75, text=progress_text)
-                                    st.session_state.processed_df = df
-                                    my_bar.progress(100, text="Processing complete!")
+                        if sotr_file.name == "SOTR-Cleaned-V4.pdf":
+                            try:
+                                xlsx_path = os.path.join('sotr_data', 'SOTR-Cleaned-V4.xlsx')
+                                st.session_state.processed_df = pd.read_excel(xlsx_path)
+                                my_bar.progress(100, text="Processing complete!")
+                            except FileNotFoundError:
+                                st.error("Corresponding Excel file not found. Processing as a new PDF.")
+                                process_pdf()
+                        elif sotr_file.type == "application/pdf":
+                            process_pdf()
                         elif sotr_file.type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
                             st.session_state.processed_df = pd.read_excel(sotr_file)
                             my_bar.progress(100, text="Processing complete!")
@@ -186,6 +96,28 @@ def sotr_document_tab(llm_client) -> None:
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error processing file: {str(e)}")
+
+                def process_pdf():
+                    sotr = SOTRMarkdown(llm_client=llm_client)
+                    file_content = sotr_file.read()
+                    file_id = f"sotr_{sotr_file.name}"
+
+                    time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
+                    estimated_pages = len(file_content) // 10000
+                    ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
+                    
+                    with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):        
+                        my_bar.progress(15, text=progress_text)
+                        sotr.load_from_pdf(file_content, file_id)
+                        my_bar.progress(50, text=progress_text)
+                        
+                        df, _ = sotr.get_matrix_points()
+                        if df.empty:
+                            st.warning("No data was extracted from the document. Please check the content and try again.")
+                        else:
+                            my_bar.progress(75, text=progress_text)
+                            st.session_state.processed_df = df
+                            my_bar.progress(100, text="Processing complete!")
 
             sotr_dialog()
 
@@ -299,14 +231,6 @@ def sotr_document_tab(llm_client) -> None:
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             st.session_state.processed_df.to_excel(writer, index=False, sheet_name='Sheet1')
         excel_data = output.getvalue()
-        
-        # with st.sidebar:
-        #     st.download_button(
-        #         label="📥 Download SOTR Matrix",
-        #         data=excel_data,
-        #         file_name="sotr_matrix.xlsx",
-        #         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        #     )
 
 @st.fragment
 def sotr_chat_container(llm_client):
@@ -445,11 +369,12 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
             margin-top: 10px;
         }
         .json-key {
-            color: rgb(255, 108, 108);
+            color: #ff6c6c;
             font-weight: bold;
+            font-style: italic;
         }
         .json-value {
-            color: rgb(250, 250, 250);
+            color: #fafafa;
         }
         .json-list {
             margin-left: 20px;
@@ -457,72 +382,115 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
         </style>
     """, unsafe_allow_html=True)
 
+    # Initialize chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Create a container for chat messages
+    chat_container = st.container()
+
+    # Display chat messages from history
+    with chat_container:
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                if message["role"] == "user":
+                    st.markdown(message["content"])
+                else:
+                    if isinstance(message["content"], dict):
+                        if "error" in message["content"]:
+                            st.error(f"Error: {message['content']['error']}")
+                            st.markdown("Raw response:")
+                            st.markdown(message['content']['raw_response'])
+                        else:
+                            st.markdown('<p class="json-key">Answer:</p>', unsafe_allow_html=True)
+                            st.write(message['content']['answer'])
+                            
+                            st.markdown('<p class="json-key">References:</p>', unsafe_allow_html=True)
+                            for ref in message['content']["references"]:
+                                st.code(ref, language="text")
+                            
+                            st.markdown('<p class="json-key">Reasoning:</p>', unsafe_allow_html=True)
+                            st.write(message['content']['reasoning'])
+
+    # Create a placeholder for the spinner
+    spinner_placeholder = st.empty()
+
+    # Accept user input at the bottom
     prompt = st.chat_input("Ask a question about the tender document")
 
-    if "history" not in st.session_state:
-        st.session_state["history"] = []
-
-    for message in st.session_state["history"]:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
     if prompt:
-        st.session_state["history"].append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        
+        # Display the user message immediately
+        with chat_container:
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
-        with st.spinner("Answering..."):
-            response = llm_client.call_llm(
-                system_prompt=f"""You are an AI assistant specialized in analyzing tender documents. Your task is to answer questions based on the extracted text from a tender document. Follow these instructions carefully:
+        # Process the user message
+        with spinner_placeholder.container():
+            with st.spinner("Answering..."):
+                response = llm_client.call_llm(
+                    system_prompt=f"""You are an AI assistant specialized in analyzing tender documents. Your task is to answer questions based on the extracted text from a tender document. Follow these instructions carefully:
 
-1. Analyze the provided extracted text from the tender document.
-2. Answer the given question based solely on the information in the extracted text.
-3. Provide your response in a JSON format with the following structure:
-   {{
-     "answer": "Your concise answer to the question",
-     "references": ["List of exact text quotes from the document used to form the answer"],
-     "reasoning": "Your step-by-step reasoning for the answer based on the extracted text references"
-   }}
-4. Ensure that your answer is directly supported by the text in the document.
-5. If the question cannot be answered based on the provided text, state this in the "answer" field and explain why in the "reasoning" field.
-6. Use the "references" array to list all relevant quotes from the document that support your answer. Each quote should be an exact match to the text in the document.
-7. In the "reasoning" field, explain how you arrived at your answer using the references provided.
-8. Your response must be a valid JSON object and nothing else. Do not include any text outside of the JSON structure.
+    1. Analyze the provided extracted text from the tender document.
+    2. Answer the given question based solely on the information in the extracted text.
+    3. Provide your response in a JSON format with the following structure:
+       {{
+         "answer": "Your concise answer to the question",
+         "references": ["List of exact text quotes from the document used to form the answer"],
+         "reasoning": "Your step-by-step reasoning for the answer based on the extracted text references"
+       }}
+    4. Ensure that your answer is directly supported by the text in the document.
+    5. If the question cannot be answered based on the provided text, state this in the "answer" field and explain why in the "reasoning" field.
+    6. Use the "references" array to list all relevant quotes from the document that support your answer. Each quote should be an exact match to the text in the document.
+    7. In the "reasoning" field, explain how you arrived at your answer using the references provided.
+    8. Your response must be a valid JSON object and nothing else. Do not include any text outside of the JSON structure.
 
-The following is the extracted text from the tender document:
+    The following is the extracted text from the tender document:
 
-{markdown_text}
+    {markdown_text}
 
-Now, provide your answer based on the given extracted text and question, ensuring it is in the correct JSON format.""",
-                user_prompt=prompt
-            )
+    Now, provide your answer based on the given extracted text and question, ensuring it is in the correct JSON format.""",
+                    user_prompt=prompt
+                )
 
-            st.session_state["history"].append({"role": "assistant", "content": response})
-            with st.chat_message("assistant"):
                 try:
-                    # Find the start of the JSON object
                     json_start = response.find('{')
                     if json_start == -1:
                         raise ValueError("No JSON object found in the response")
                     
-                    # Extract the JSON part of the response
                     json_response = json.loads(response[json_start:])
                     
-                    st.markdown("<div class='json-response' style='background-color: rgba(38, 39, 48, 0.5); padding: 10px; border-radius: 5px;'>", unsafe_allow_html=True)
-                    st.markdown("<span class='json-key'>Answer:</span>", unsafe_allow_html=True)
-                    st.markdown(f"<span class='json-value'>{json_response['answer']}</span>", unsafe_allow_html=True)
+                    # Add AI response to chat history
+                    st.session_state.messages.append({"role": "assistant", "content": json_response})
                     
-                    st.markdown("<span class='json-key'>References:</span>", unsafe_allow_html=True)
-                    for ref in json_response["references"]:
-                        st.code(ref, language="text")
+                    # Display the AI response
+                    with chat_container:
+                        with st.chat_message("assistant"):
+                            st.markdown('<p class="json-key">Answer:</p>', unsafe_allow_html=True)
+                            st.write(json_response['answer'])
+                            
+                            st.markdown('<p class="json-key">References:</p>', unsafe_allow_html=True)
+                            for ref in json_response["references"]:
+                                st.code(ref, language="text")
+                            
+                            st.markdown('<p class="json-key">Reasoning:</p>', unsafe_allow_html=True)
+                            st.write(json_response['reasoning'])
                     
-                    st.markdown("<span class='json-key'>Reasoning:</span>", unsafe_allow_html=True)
-                    st.markdown(f"<span class='json-value'>{json_response['reasoning']}</span>", unsafe_allow_html=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
                 except (json.JSONDecodeError, ValueError) as e:
                     st.error(f"Error processing response: {str(e)}")
-                    st.markdown("Raw response:")
-                    st.markdown(response)
+                    st.session_state.messages.append({"role": "assistant", "content": {"error": str(e), "raw_response": response}})
+                    
+                    # Display the error message
+                    with chat_container:
+                        with st.chat_message("assistant"):
+                            st.error(f"Error: {str(e)}")
+                            st.markdown("Raw response:")
+                            st.markdown(response)
+
+        # Clear the spinner after processing
+        spinner_placeholder.empty()
 
 def compliance_matrix_tab():
     st.write("<div style='text-align: center; font-size: 24px; margin-top: 100px;'>Compliance Check</div>", unsafe_allow_html=True)
