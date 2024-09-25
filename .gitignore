@@ -7,3 +7,5 @@ poetry.lock
 key.json
 env/
 matrix_popup_button
+sotr_data
+tender_data

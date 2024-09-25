@@ -451,7 +451,17 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                     if json_start == -1:
                         raise ValueError("No JSON object found in the response")
                     
-                    json_response = json.loads(response[json_start:])
+                    # Remove any trailing characters after the last closing brace
+                    json_end = response.rfind('}')
+                    if json_end == -1:
+                        raise ValueError("No closing brace found in the response")
+                    
+                    json_string = response[json_start:json_end+1]
+                    
+                    # Replace any unescaped newlines within string values
+                    json_string = re.sub(r'(?<!\\)\\n', r'\\n', json_string)
+                    
+                    json_response = json.loads(json_string)
                     
                     st.session_state.messages.append({"role": "assistant", "content": json_response})
                     
