@@ -12,6 +12,7 @@ import gc
 from dotenv import load_dotenv
 from datetime import datetime
 import json
+import re
 
 load_dotenv()
 
