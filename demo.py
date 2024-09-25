@@ -10,7 +10,6 @@ import io
 import pandas as pd
 import gc
 from dotenv import load_dotenv
-import traceback
 from datetime import datetime
 import json
 
@@ -382,14 +381,11 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
         </style>
     """, unsafe_allow_html=True)
 
-    # Initialize chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Create a container for chat messages
     chat_container = st.container()
 
-    # Display chat messages from history
     with chat_container:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
@@ -412,22 +408,17 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                             st.markdown('<p class="json-key">Reasoning:</p>', unsafe_allow_html=True)
                             st.write(message['content']['reasoning'])
 
-    # Create a placeholder for the spinner
     spinner_placeholder = st.empty()
 
-    # Accept user input at the bottom
     prompt = st.chat_input("Ask a question about the tender document")
 
     if prompt:
-        # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         
-        # Display the user message immediately
         with chat_container:
             with st.chat_message("user"):
                 st.markdown(prompt)
 
-        # Process the user message
         with spinner_placeholder.container():
             with st.spinner("Answering..."):
                 response = llm_client.call_llm(
@@ -462,10 +453,8 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                     
                     json_response = json.loads(response[json_start:])
                     
-                    # Add AI response to chat history
                     st.session_state.messages.append({"role": "assistant", "content": json_response})
                     
-                    # Display the AI response
                     with chat_container:
                         with st.chat_message("assistant"):
                             st.markdown('<p class="json-key">Answer:</p>', unsafe_allow_html=True)
@@ -482,14 +471,12 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                     st.error(f"Error processing response: {str(e)}")
                     st.session_state.messages.append({"role": "assistant", "content": {"error": str(e), "raw_response": response}})
                     
-                    # Display the error message
                     with chat_container:
                         with st.chat_message("assistant"):
                             st.error(f"Error: {str(e)}")
                             st.markdown("Raw response:")
                             st.markdown(response)
 
-        # Clear the spinner after processing
         spinner_placeholder.empty()
 
 def compliance_matrix_tab():
@@ -520,36 +507,33 @@ def compliance_matrix_tab():
         if st.button("Run Compliance Check"):
             with st.spinner("Running compliance check..."):
                 compliance_checker = ComplianceChecker()
+                
                 if isinstance(sotr_matrix, pd.DataFrame):
-                    buffer = io.BytesIO()
-                    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                        sotr_matrix.to_excel(writer, index=False)
-                    compliance_checker.load_matrix(buffer.getvalue())
-                elif isinstance(sotr_matrix, bytes):
                     compliance_checker.load_matrix(sotr_matrix)
+                elif isinstance(sotr_file, bytes):
+                    compliance_checker.load_matrix(sotr_file.getvalue())
                 else:
-                    buffer = io.BytesIO()
-                    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                        pd.read_excel(sotr_matrix).to_excel(writer, index=False)
-                    compliance_checker.load_matrix(buffer.getvalue())
+                    st.error("Unsupported SOTR matrix type")
+                    return
                 
                 if isinstance(tender_document, str):
-                    compliance_checker.load_tender(tender_document.encode('utf-8'))
+                    compliance_checker.load_tender(tender_document)
                 elif isinstance(tender_document, bytes):
                     compliance_checker.load_tender(tender_document)
                 else:
-                    raise ValueError("Unsupported tender document type")
+                    st.error("Unsupported tender document type")
+                    return
                 
                 compliance_results = compliance_checker.check_compliance()
 
                 st.write("Compliance Check Results:")
-                st.dataframe(compliance_results.style.apply(color_rows, axis=1))
+                st.data_editor(compliance_results.style.apply(color_rows, axis=1), hide_index=True)
 
 def color_rows(row):
     color_map = {
-        'Yes': 'background-color: #006400',  # Dark green
-        'Partial': 'background-color: #8B8000',  # Dark yellow
-        'No': 'background-color: #8B0000'  # Dark red
+        'Yes': 'background-color: #006400',
+        'Partial': 'background-color: #8B8000',
+        'No': 'background-color: #8B0000'
     }
     return [color_map.get(row['Status'], '') for _ in row]
         

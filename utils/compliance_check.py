@@ -11,26 +11,35 @@ class ComplianceChecker:
         self.tender_markdown = None
         self.sotr_matrix_content = None
 
-    def load_tender(self, tender_file_content: bytes) -> None:
+    def load_tender(self, tender_file_content: bytes | str) -> None:
         """
-        Load tender data from a PDF file.
+        Load tender data from a PDF file or string content.
         """
-        try:
-            tender = PDFMarkdown()
+        if isinstance(tender_file_content, str):
+            self.tender_markdown = tender_file_content
+        elif isinstance(tender_file_content, bytes):
+            try:
+                tender = PDFMarkdown()
+                self.tender_markdown = tender.pdf_to_markdown(tender_file_content)
+            except Exception as e:
+                raise Exception(f"Error converting PDF to markdown: {str(e)}")
+        else:
+            raise ValueError("Invalid input for tender file. It should be a string or bytes content.")
 
-            self.tender_markdown = tender.pdf_to_markdown(tender_file_content)
-        
-        except Exception as e:
-            raise Exception(f"Error loading tender data: {str(e)}")
-
-    def load_matrix(self, sotr_matrix_file_content: bytes) -> None:
+    def load_matrix(self, sotr_matrix_file_content: pd.DataFrame | bytes) -> None:
         """
-        Load compliance matrix from an xlsx file.
+        Load compliance matrix from a DataFrame or xlsx file content.
         """
-        try:
-            self.sotr_matrix_content = pd.read_excel(BytesIO(sotr_matrix_file_content))
-        except Exception as e:
-            raise Exception(f"Error loading SOTR matrix: {str(e)}")
+        if isinstance(sotr_matrix_file_content, pd.DataFrame):
+            self.sotr_matrix_content = sotr_matrix_file_content
+        elif isinstance(sotr_matrix_file_content, bytes):
+            try:
+                self.sotr_matrix_content = pd.read_excel(BytesIO(sotr_matrix_file_content))
+            except Exception as e:
+                raise Exception(f"Error reading Excel file: {str(e)}")
+        else:
+            raise ValueError("Invalid input for SOTR matrix. It should be a pandas DataFrame or bytes.")
+    
     def check_compliance(self) -> pd.DataFrame:
         if self.tender_markdown is None or self.sotr_matrix_content is None:
             raise Exception("Tender document or SOTR matrix not loaded.")
@@ -38,8 +47,8 @@ class ComplianceChecker:
         compliance_results = pd.DataFrame(columns=['Clause Number', 'Clause Text', 'Compliance Summary', 'Status'])
         compliance_checker_expert = LLMClient()
 
-        for i in range(0, len(self.sotr_matrix_content), 10):
-            rows = self.sotr_matrix_content.iloc[i:i+10]
+        for i in range(0, len(self.sotr_matrix_content), 5):
+            rows = self.sotr_matrix_content.iloc[i:i+5]
             
             system_prompt = """
                 You are a compliance analyst tasked with comparing a list of compliance clauses against extracted text from a tender document. For each clause, perform the following steps:
