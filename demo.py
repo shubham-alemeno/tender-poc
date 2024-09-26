@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import json
 import re
+import requests
 
 load_dotenv()
 
@@ -487,6 +488,30 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                             st.error(f"Error: {str(e)}")
                             st.markdown("Raw response:")
                             st.markdown(response)
+                
+                except requests.exceptions.HTTPError as e:
+                    error_message = ""
+                    if e.response.status_code == 400:
+                        error_message = "Invalid request: There was an issue with the format or content of your request."
+                    elif e.response.status_code == 401:
+                        error_message = "Authentication error: There's an issue with your API key."
+                    elif e.response.status_code == 403:
+                        error_message = "Permission error: Your API key does not have permission to use the specified resource."
+                    elif e.response.status_code == 404:
+                        error_message = "Not found: The requested resource was not found."
+                    elif e.response.status_code == 413:
+                        error_message = "Request too large: Request exceeds the maximum allowed number of bytes."
+                    elif e.response.status_code == 429:
+                        error_message = "Rate limit error: Your account has hit a rate limit."
+                    elif e.response.status_code == 500:
+                        error_message = "API error: An unexpected error has occurred internal to Anthropic's systems."
+                    elif e.response.status_code == 529:
+                        error_message = "Overloaded error: Anthropic's API is temporarily overloaded."
+                    else:
+                        error_message = f"HTTP Error: {str(e)}"
+                    
+                    st.error(error_message)
+                    st.session_state.messages.append({"role": "assistant", "content": {"error": error_message}})
 
         spinner_placeholder.empty()
 
