@@ -347,8 +347,6 @@ def tender_qa_tab(llm_client) -> None:
     if st.session_state["pdf_processed"] and "tender_markdown" in st.session_state:
         tender_qa_chat_container(llm_client, st.session_state["tender_markdown"])
 
-
-@st.fragment
 def tender_qa_chat_container(llm_client, markdown_text) -> None:
     st.markdown("""
         <style>
