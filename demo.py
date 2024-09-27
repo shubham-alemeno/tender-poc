@@ -440,6 +440,7 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
     6. Use the "references" array to list all relevant quotes from the document that support your answer. Each quote should be an exact match to the text in the document.
     7. In the "reasoning" field, explain how you arrived at your answer using the references provided.
     8. Your response must be a valid JSON object and nothing else. Do not include any text outside of the JSON structure.
+    9. Ensure that all string values in the JSON response are properly escaped, especially for newlines and control characters.
 
     The following is the extracted text from the tender document:
 
@@ -462,9 +463,35 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                         raise ValueError("No closing brace found in the response")
                     
                     json_string = response[json_start:json_end+1]
-                    json_string = re.sub(r'(?<!\\)\\n', r'\\n', json_string)
+                    json_string = re.sub(r'[\x00-\x1F\x7F-\x9F]|(?<!\\)\\(?!["\\\/bfnrt])|[\ud800-\udfff]|"\s*(?:(?![\x20-\x7E]).)*\s*"', 
+                                         lambda m: '' if re.match(r'[\x00-\x1F\x7F-\x9F]', m.group()) else 
+                                                   '\\n' if m.group() == '\n' else 
+                                                   '\\r' if m.group() == '\r' else 
+                                                   '\\t' if m.group() == '\t' else 
+                                                   '\\b' if m.group() == '\b' else 
+                                                   '\\f' if m.group() == '\f' else 
+                                                   m.group().encode('unicode_escape').decode() if re.match(r'[\ud800-\udfff]', m.group()) else 
+                                                   '', 
+                                         json_string)
                     
-                    json_response = json.loads(json_string)
+                    # Handle potential JSON parsing errors
+                    try:
+                        json_response = json.loads(json_string)
+                    except json.JSONDecodeError:
+                        # Attempt to fix common JSON issues
+                        json_string = json_string.replace("'", '"')  # Replace single quotes with double quotes
+                        json_string = re.sub(r',\s*}', '}', json_string)  # Remove trailing commas
+                        json_string = re.sub(r',\s*]', ']', json_string)
+                        try:
+                            json_response = json.loads(json_string)
+                        except json.JSONDecodeError:
+                            raise ValueError("Unable to parse JSON response after attempted fixes")
+                    
+                    # Validate JSON structure
+                    required_keys = ["answer", "references", "reasoning"]
+                    if not all(key in json_response for key in required_keys):
+                        missing_keys = [key for key in required_keys if key not in json_response]
+                        raise ValueError(f"JSON response is missing required keys: {', '.join(missing_keys)}")
                     
                     st.session_state.messages.append({"role": "assistant", "content": json_response})
                     
