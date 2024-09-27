@@ -423,8 +423,9 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
 
         with spinner_placeholder.container():
             with st.spinner("Answering..."):
-                response = llm_client.call_llm(
-                    system_prompt=f"""You are an AI assistant specialized in analyzing tender documents. Your task is to answer questions based on the extracted text from a tender document. Follow these instructions carefully:
+                try:
+                    response = llm_client.call_llm(
+                        system_prompt=f"""You are an AI assistant specialized in analyzing tender documents. Your task is to answer questions based on the extracted text from a tender document. Follow these instructions carefully:
 
     1. Analyze the provided extracted text from the tender document.
     2. Answer the given question based solely on the information in the extracted text.
@@ -445,22 +446,22 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
     {markdown_text}
 
     Now, provide your answer based on the given extracted text and question, ensuring it is in the correct JSON format.""",
-                    user_prompt=prompt
-                )
+                        user_prompt=prompt
+                    )
 
-                try:
+                    if response is None:
+                        st.warning("Rate limit reached. Please try again after some time.")
+                        return
+
                     json_start = response.find('{')
                     if json_start == -1:
                         raise ValueError("No JSON object found in the response")
                     
-                    # Remove any trailing characters after the last closing brace
                     json_end = response.rfind('}')
                     if json_end == -1:
                         raise ValueError("No closing brace found in the response")
                     
                     json_string = response[json_start:json_end+1]
-                    
-                    # Replace any unescaped newlines within string values
                     json_string = re.sub(r'(?<!\\)\\n', r'\\n', json_string)
                     
                     json_response = json.loads(json_string)
@@ -480,18 +481,21 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                             st.write(json_response['reasoning'])
                     
                 except (json.JSONDecodeError, ValueError) as e:
-                    st.error(f"Error processing response: {str(e)}")
-                    st.session_state.messages.append({"role": "assistant", "content": {"error": str(e), "raw_response": response}})
+                    error_message = f"Error processing response: {str(e)}"
+                    st.warning(error_message)
+                    st.session_state.messages.append({"role": "assistant", "content": {"error": error_message, "raw_response": response if response else "No response received"}})
                     
                     with chat_container:
                         with st.chat_message("assistant"):
-                            st.error(f"Error: {str(e)}")
+                            st.warning(error_message)
                             st.markdown("Raw response:")
-                            st.markdown(response)
+                            st.markdown(response if response else "No response received")
                 
                 except requests.exceptions.HTTPError as e:
                     error_message = ""
-                    if e.response.status_code == 400:
+                    if e.response.status_code == 429:
+                        error_message = "Rate limit reached. Please try again after some time."
+                    elif e.response.status_code == 400:
                         error_message = "Invalid request: There was an issue with the format or content of your request."
                     elif e.response.status_code == 401:
                         error_message = "Authentication error: There's an issue with your API key."
@@ -501,8 +505,6 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                         error_message = "Not found: The requested resource was not found."
                     elif e.response.status_code == 413:
                         error_message = "Request too large: Request exceeds the maximum allowed number of bytes."
-                    elif e.response.status_code == 429:
-                        error_message = "Rate limit error: Your account has hit a rate limit."
                     elif e.response.status_code == 500:
                         error_message = "API error: An unexpected error has occurred internal to Anthropic's systems."
                     elif e.response.status_code == 529:
@@ -510,7 +512,31 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                     else:
                         error_message = f"HTTP Error: {str(e)}"
                     
-                    st.error(error_message)
+                    st.warning(error_message)
+                    st.session_state.messages.append({"role": "assistant", "content": {"error": error_message}})
+
+                except Exception as e:
+                    error_message = str(e)
+                    if "429" in error_message:
+                        error_message = "Rate limit reached. Please try again after some time."
+                    elif "400" in error_message:
+                        error_message = "Invalid request: There was an issue with the format or content of your request."
+                    elif "401" in error_message:
+                        error_message = "Authentication error: There's an issue with your API key."
+                    elif "403" in error_message:
+                        error_message = "Permission error: Your API key does not have permission to use the specified resource."
+                    elif "404" in error_message:
+                        error_message = "Not found: The requested resource was not found."
+                    elif "413" in error_message:
+                        error_message = "Request too large: Request exceeds the maximum allowed number of bytes."
+                    elif "500" in error_message:
+                        error_message = "API error: An unexpected error has occurred internal to Anthropic's systems."
+                    elif "529" in error_message:
+                        error_message = "Overloaded error: Anthropic's API is temporarily overloaded."
+                    else:
+                        error_message = f"An unexpected error occurred: {error_message}"
+                    
+                    st.warning(error_message)
                     st.session_state.messages.append({"role": "assistant", "content": {"error": error_message}})
 
         spinner_placeholder.empty()
