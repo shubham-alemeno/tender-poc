@@ -387,17 +387,20 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
     chat_container = st.container()
 
     with chat_container:
+        # Display previous messages
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 if message["role"] == "user":
                     st.markdown(message["content"])
                 else:
                     if isinstance(message["content"], dict):
+                        # Check for error messages
                         if "error" in message["content"]:
                             st.error(f"Error: {message['content']['error']}")
                             st.markdown("Raw response:")
                             st.markdown(message['content']['raw_response'])
                         else:
+                            # Display JSON-based response properly
                             st.markdown('<p class="json-key">Answer:</p>', unsafe_allow_html=True)
                             st.write(message['content']['answer'])
                             
@@ -407,9 +410,13 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                             
                             st.markdown('<p class="json-key">Reasoning:</p>', unsafe_allow_html=True)
                             st.write(message['content']['reasoning'])
+                            
+                            st.markdown('<p class="json-key">Compliance Status:</p>', unsafe_allow_html=True)
+                            st.write(message['content']['compliance_status'])
 
     spinner_placeholder = st.empty()
 
+    # Input field for user questions
     prompt = st.chat_input("Ask a question about the tender document")
 
     if prompt:
@@ -422,77 +429,85 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
         with spinner_placeholder.container():
             with st.spinner("Answering..."):
                 try:
+                    # Call the LLM with the new system prompt including the markdown text
                     response = llm_client.call_llm(
-                        system_prompt=f"""You are an AI assistant specialized in analyzing tender documents. Your task is to answer questions based on the extracted text from a tender document. Follow these instructions carefully:
+                        system_prompt = f"""You are an AI assistant specialized in analyzing tender documents. Your task is to answer questions based on the extracted text from a tender document. Follow these instructions carefully:
 
-    1. Analyze the provided extracted text from the tender document.
-    2. Answer the given question based solely on the information in the extracted text.
-    3. Provide your response in a JSON format with the following structure:
-       {{
-         "answer": "Your concise answer to the question",
-         "references": ["List of exact text quotes from the document used to form the answer"],
-         "reasoning": "Your step-by-step reasoning for the answer based on the extracted text references"
-       }}
-    4. Ensure that your answer is directly supported by the text in the document.
-    5. If the question cannot be answered based on the provided text, state this in the "answer" field and explain why in the "reasoning" field.
-    6. Use the "references" array to list all relevant quotes from the document that support your answer. Each quote should be an exact match to the text in the document.
-    7. In the "reasoning" field, explain how you arrived at your answer using the references provided.
-    8. Your response must be a valid JSON object and nothing else. Do not include any text outside of the JSON structure.
-    9. Ensure that all string values in the JSON response are properly escaped, especially for newlines and control characters.
+Extract the page numbers from the markdown text using the format 'Page X' and include them in the reference section.
+Analyze the provided extracted text from the tender document, focusing on sections that indicate:
 
-    The following is the extracted text from the tender document:
+Acceptance (compliance) with the tender requirements
+Deviation (non-compliance) from the tender requirements
 
-    {markdown_text}
+Answer the given question based solely on the information in the extracted text, and always check for references in the compliance matrix.
+Provide your response in JSON format with the following structure:
+{{
+  "answer": "Your concise answer to the question",
+  "references": [
+    {{
+      "page": "Page number where reference is found",
+      "section": "Section number/identifier",
+      "sl_number": "Serial/Line number if applicable", 
+      "reference_text": "Exact quote from the document"
+    }}
+  ],
+  "reasoning": "Step-by-step reasoning for the answer using the provided references",
+  "compliance_status": "Compliant or Non-Compliant based on the references"
+}}
 
-    Now, provide your answer based on the given extracted text and question, ensuring it is in the correct JSON format.""",
+For the references array:
+Include all relevant quotes that support your answer.
+Each quote must be exact and include page number, section, and SL number.
+Structure each reference as an object with page, section, sl_number, and reference_text fields.
+
+In the reasoning field:
+Explain step-by-step how you arrived at your answer.
+Reference specific quotes from the document.
+Show clear logical progression.
+
+For the compliance_status field:
+Provide a clear judgment: either "Compliant" or "Non-Compliant."
+Base this strictly on the information in the references.
+
+If the question cannot be answered from the provided text:
+State this clearly in the "answer" field.
+Explain why in the "reasoning" field.
+List any relevant but insufficient references.
+
+Here is the extracted text from the tender document:
+{markdown_text}
+
+Now, provide your answer based on the given extracted text and question, ensuring it is in the correct JSON format.
+""",
                         user_prompt=prompt
                     )
 
                     if response is None:
-                        st.warning("Rate limit reached. Please try again after some time.")
+                        st.warning("Rate limit reached. Please try again later.")
                         return
 
+                    # Parse the response as JSON
                     json_start = response.find('{')
-                    if json_start == -1:
-                        raise ValueError("No JSON object found in the response")
-                    
                     json_end = response.rfind('}')
-                    if json_end == -1:
-                        raise ValueError("No closing brace found in the response")
-                    
+                    if json_start == -1 or json_end == -1:
+                        raise ValueError("No valid JSON object found in the response")
+
                     json_string = response[json_start:json_end+1]
-                    json_string = re.sub(r'[\x00-\x1F\x7F-\x9F]|(?<!\\)\\(?!["\\\/bfnrt])|[\ud800-\udfff]|"\s*(?:(?![\x20-\x7E]).)*\s*"', 
-                                         lambda m: '' if re.match(r'[\x00-\x1F\x7F-\x9F]', m.group()) else 
-                                                   '\\n' if m.group() == '\n' else 
-                                                   '\\r' if m.group() == '\r' else 
-                                                   '\\t' if m.group() == '\t' else 
-                                                   '\\b' if m.group() == '\b' else 
-                                                   '\\f' if m.group() == '\f' else 
-                                                   m.group().encode('unicode_escape').decode() if re.match(r'[\ud800-\udfff]', m.group()) else 
-                                                   '', 
-                                         json_string)
-                    
-                    # Handle potential JSON parsing errors
+
+                    # Attempt to load the response as a JSON object
                     try:
                         json_response = json.loads(json_string)
                     except json.JSONDecodeError:
-                        # Attempt to fix common JSON issues
-                        json_string = json_string.replace("'", '"')  # Replace single quotes with double quotes
-                        json_string = re.sub(r',\s*}', '}', json_string)  # Remove trailing commas
-                        json_string = re.sub(r',\s*]', ']', json_string)
-                        try:
-                            json_response = json.loads(json_string)
-                        except json.JSONDecodeError:
-                            raise ValueError("Unable to parse JSON response after attempted fixes")
-                    
-                    # Validate JSON structure
-                    required_keys = ["answer", "references", "reasoning"]
+                        raise ValueError("Unable to parse the response as JSON")
+
+                    # Validate required fields in the response
+                    required_keys = ["answer", "references", "reasoning", "compliance_status"]
                     if not all(key in json_response for key in required_keys):
-                        missing_keys = [key for key in required_keys if key not in json_response]
-                        raise ValueError(f"JSON response is missing required keys: {', '.join(missing_keys)}")
-                    
+                        raise ValueError("JSON response is missing required fields")
+
+                    # Add the valid JSON response to the session messages
                     st.session_state.messages.append({"role": "assistant", "content": json_response})
-                    
+
                     with chat_container:
                         with st.chat_message("assistant"):
                             st.markdown('<p class="json-key">Answer:</p>', unsafe_allow_html=True)
@@ -500,71 +515,54 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                             
                             st.markdown('<p class="json-key">References:</p>', unsafe_allow_html=True)
                             for ref in json_response["references"]:
-                                st.code(ref, language="text")
+                                st.markdown(f"""
+    <style>
+    .reference-box {{
+        background-color: #1E1E1E;
+        border: 1px solid #4682b4;
+        border-radius: 0.5rem;
+        padding: 10px;
+        margin-top: 10px;
+    }}
+    .reference-key {{
+        font-weight: bold;
+        color: #ff6c6c;
+    }}
+    .reference-value {{
+        color: #ffffff;
+    }}
+    </style>
+    <div class="reference-box">
+        <p><span class="reference-key">Page:</span> <span class="reference-value">{ref.get('page', 'N/A')}</span></p>
+        <p><span class="reference-key">Section:</span> <span class="reference-value">{ref.get('section', 'N/A')}</span></p>
+        <p><span class="reference-key">SL Number:</span> <span class="reference-value">{ref.get('sl_number', 'N/A')}</span></p>
+    </div>
+""", unsafe_allow_html=True)
+                                st.code(ref.get('reference_text', 'No reference text available'), language="text")
                             
                             st.markdown('<p class="json-key">Reasoning:</p>', unsafe_allow_html=True)
                             st.write(json_response['reasoning'])
-                    
-                except (json.JSONDecodeError, ValueError) as e:
+                            
+                            st.markdown('<p class="json-key">Compliance Status:</p>', unsafe_allow_html=True)
+                            st.write(json_response['compliance_status'])
+
+                except (ValueError, json.JSONDecodeError) as e:
                     error_message = f"Error processing response: {str(e)}"
                     st.warning(error_message)
-                    st.session_state.messages.append({"role": "assistant", "content": {"error": error_message, "raw_response": response if response else "No response received"}})
-                    
+                    st.session_state.messages.append({"role": "assistant", "content": {"error": error_message, "raw_response": response}})
                     with chat_container:
                         with st.chat_message("assistant"):
                             st.warning(error_message)
                             st.markdown("Raw response:")
                             st.markdown(response if response else "No response received")
-                
-                except requests.exceptions.HTTPError as e:
-                    error_message = ""
-                    if e.response.status_code == 429:
-                        error_message = "Rate limit reached. Please try again after some time."
-                    elif e.response.status_code == 400:
-                        error_message = "Invalid request: There was an issue with the format or content of your request."
-                    elif e.response.status_code == 401:
-                        error_message = "Authentication error: There's an issue with your API key."
-                    elif e.response.status_code == 403:
-                        error_message = "Permission error: Your API key does not have permission to use the specified resource."
-                    elif e.response.status_code == 404:
-                        error_message = "Not found: The requested resource was not found."
-                    elif e.response.status_code == 413:
-                        error_message = "Request too large: Request exceeds the maximum allowed number of bytes."
-                    elif e.response.status_code == 500:
-                        error_message = "API error: An unexpected error has occurred internal to Anthropic's systems."
-                    elif e.response.status_code == 529:
-                        error_message = "Overloaded error: Anthropic's API is temporarily overloaded."
-                    else:
-                        error_message = f"HTTP Error: {str(e)}"
-                    
-                    st.warning(error_message)
-                    st.session_state.messages.append({"role": "assistant", "content": {"error": error_message}})
 
                 except Exception as e:
-                    error_message = str(e)
-                    if "429" in error_message:
-                        error_message = "Rate limit reached. Please try again after some time."
-                    elif "400" in error_message:
-                        error_message = "Invalid request: There was an issue with the format or content of your request."
-                    elif "401" in error_message:
-                        error_message = "Authentication error: There's an issue with your API key."
-                    elif "403" in error_message:
-                        error_message = "Permission error: Your API key does not have permission to use the specified resource."
-                    elif "404" in error_message:
-                        error_message = "Not found: The requested resource was not found."
-                    elif "413" in error_message:
-                        error_message = "Request too large: Request exceeds the maximum allowed number of bytes."
-                    elif "500" in error_message:
-                        error_message = "API error: An unexpected error has occurred internal to Anthropic's systems."
-                    elif "529" in error_message:
-                        error_message = "Overloaded error: Anthropic's API is temporarily overloaded."
-                    else:
-                        error_message = f"An unexpected error occurred: {error_message}"
-                    
+                    error_message = f"An unexpected error occurred: {str(e)}"
                     st.warning(error_message)
                     st.session_state.messages.append({"role": "assistant", "content": {"error": error_message}})
 
         spinner_placeholder.empty()
+
 
 def compliance_matrix_tab():
     st.write("<div style='text-align: center; font-size: 24px; margin-top: 100px;'>Compliance Check</div>", unsafe_allow_html=True)
