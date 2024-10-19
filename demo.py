@@ -234,47 +234,6 @@ def sotr_document_tab(llm_client) -> None:
             st.session_state.processed_df.to_excel(writer, index=False, sheet_name='Sheet1')
         excel_data = output.getvalue()
 
-@st.fragment
-def sotr_chat_container(llm_client):
-    st.markdown("""
-        <style>
-        .element-container:has(.stChatInput) {
-            position: fixed;
-            left: 60%;
-            bottom: 20px;
-            transform: translate(-50%, -50%);
-            margin: 0 auto;
-            z-index: 1000;
-        }
-        .stChatInput {
-            flex-wrap: nowrap;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-    prompt = st.chat_input("Ask anything about the SOTR document")
-
-    if "sotr_history" not in st.session_state:
-        st.session_state["sotr_history"] = []
-
-    for message in st.session_state["sotr_history"]:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    if prompt:
-        st.session_state["sotr_history"].append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        with st.spinner("Answering..."):
-            response = llm_client.call_llm(
-                system_prompt=f"You are a helpful assistant.",
-                user_prompt=prompt
-            )
-
-            st.session_state["sotr_history"].append({"role": "assistant", "content": response})
-            with st.chat_message("assistant"):
-                st.markdown(response)
-
 def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(file_content)
@@ -390,20 +349,17 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
     chat_container = st.container()
 
     with chat_container:
-        # Display previous messages
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 if message["role"] == "user":
                     st.markdown(message["content"])
                 else:
                     if isinstance(message["content"], dict):
-                        # Check for error messages
                         if "error" in message["content"]:
                             st.error(f"Error: {message['content']['error']}")
                             st.markdown("Raw response:")
                             st.markdown(message['content']['raw_response'])
                         else:
-                            # Display JSON-based response properly
                             st.markdown('<p class="json-key">Answer:</p>', unsafe_allow_html=True)
                             st.write(message['content']['answer'])
                             
@@ -419,7 +375,6 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
 
     spinner_placeholder = st.empty()
 
-    # Input field for user questions
     prompt = st.chat_input("Ask a question about the tender document")
 
     if prompt:
@@ -432,7 +387,6 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
         with spinner_placeholder.container():
             with st.spinner("Answering..."):
                 try:
-                    # Call the LLM with the new system prompt including the markdown text
                     response = llm_client.call_llm(
                         system_prompt = f"""You are an AI assistant specialized in analyzing tender documents. Your task is to answer questions based on the extracted text from a tender document. Follow these instructions carefully:
 
@@ -489,7 +443,6 @@ Now, provide your answer based on the given extracted text and question, ensurin
                         st.warning("Rate limit reached. Please try again later.")
                         return
 
-                    # Parse the response as JSON
                     json_start = response.find('{')
                     json_end = response.rfind('}')
                     if json_start == -1 or json_end == -1:
@@ -497,18 +450,15 @@ Now, provide your answer based on the given extracted text and question, ensurin
 
                     json_string = response[json_start:json_end+1]
 
-                    # Attempt to load the response as a JSON object
                     try:
                         json_response = json.loads(json_string)
                     except json.JSONDecodeError:
                         raise ValueError("Unable to parse the response as JSON")
 
-                    # Validate required fields in the response
                     required_keys = ["answer", "references", "reasoning", "compliance_status"]
                     if not all(key in json_response for key in required_keys):
                         raise ValueError("JSON response is missing required fields")
 
-                    # Add the valid JSON response to the session messages
                     st.session_state.messages.append({"role": "assistant", "content": json_response})
 
                     with chat_container:
