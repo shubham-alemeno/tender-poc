@@ -296,13 +296,19 @@ def convert_pdf_to_markdown(file_content, file_name, progress_callback=None):
             st.warning(f"Could not delete temporary file: {str(e)}")
 
 def tender_qa_tab(llm_client) -> None:
+    if "pdf_processed" not in st.session_state:
+        st.session_state["pdf_processed"] = False
+    if "tender_markdown" not in st.session_state:
+        st.session_state["tender_markdown"] = None
+    if "last_processed_file" not in st.session_state:
+        st.session_state["last_processed_file"] = None
+
     uploaded_file = st.file_uploader("Upload Tender Document", type=["pdf"], key="tender_qa_pdf_uploader")
-    st.session_state["pdf_processed"] = False
-    tender_in_markdown_format = None
     
-    if uploaded_file is not None:
+    if uploaded_file is not None and (not st.session_state["pdf_processed"] or uploaded_file.name != st.session_state["last_processed_file"]):
         st.session_state["tender_document"] = uploaded_file
         st.session_state["pdf_processed"] = False
+        st.session_state["last_processed_file"] = uploaded_file.name
         
         if uploaded_file.name == "TechOffer_RefPlant_GRSE.pdf":
             try:
@@ -311,40 +317,36 @@ def tender_qa_tab(llm_client) -> None:
                 st.session_state["pdf_processed"] = True
                 st.session_state["tender_markdown"] = tender_in_markdown_format
             except FileNotFoundError:
-                pass
+                st.warning("Pre-processed markdown file not found. Processing the PDF...")
         
         if not st.session_state["pdf_processed"]:
             try:
                 file_content = uploaded_file.getvalue()
-                time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
-                estimated_pages = len(file_content) // 10000
-                ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages
+                estimated_pages = len(file_content) // 50000
+                ETA_time_in_minutes = 0.5 * estimated_pages
                 
-                progress_text = "Started processing tender document : 0% complete"
+                progress_text = "Started processing tender document: 0% complete"
                 my_bar = st.progress(0, text=progress_text)
 
-                with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):
+                with st.spinner(f"This might take up to {ETA_time_in_minutes:.2f} minutes"):
                     def update_progress(step, step_name):
-                        print(f"Step {step_name}: {step}")
                         progress = int(step)
-                        my_bar.progress(progress, text=f"{step_name} : {int(step)}% complete")
+                        my_bar.progress(progress, text=f"{step_name}: {progress}% complete")
 
-                    tender_in_markdown_format = convert_pdf_to_markdown(file_content, uploaded_file.name, update_progress)
+                    st.session_state["tender_markdown"] = convert_pdf_to_markdown(file_content, uploaded_file.name, update_progress)
 
-                if not tender_in_markdown_format:
+                if not st.session_state["tender_markdown"]:
                     st.error("PDF to Markdown conversion failed: Empty result")
                     return
 
                 my_bar.progress(100, text="Processing complete!")
                 st.session_state["pdf_processed"] = True
-                st.session_state["tender_markdown"] = tender_in_markdown_format
            
             except Exception as e:
                 st.error(f"Error processing tender document: {str(e)}")
-    else:
-        pass
+                return
 
-    if st.session_state["pdf_processed"] and "tender_markdown" in st.session_state:
+    if st.session_state["pdf_processed"] and st.session_state["tender_markdown"]:
         tender_qa_chat_container(llm_client, st.session_state["tender_markdown"])
 
 def tender_qa_chat_container(llm_client, markdown_text) -> None:
