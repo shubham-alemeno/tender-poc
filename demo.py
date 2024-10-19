@@ -70,6 +70,29 @@ def sotr_document_tab(llm_client) -> None:
             def sotr_dialog():
                 st.write("Choose an option to load SOTR document:")
                 sotr_file = st.file_uploader("Upload new SOTR Document", type=["pdf", "xlsx"], key="sotr_file_upload")
+
+                def process_pdf():
+                    sotr = SOTRMarkdown(llm_client=llm_client)
+                    file_content = sotr_file.read()
+                    file_id = f"sotr_{sotr_file.name}"
+
+                    time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
+                    estimated_pages = len(file_content) // 50000
+                    ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
+                    
+                    with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):        
+                        my_bar.progress(15, text=progress_text)
+                        sotr.load_from_pdf(file_content, file_id)
+                        my_bar.progress(50, text=progress_text)
+                        
+                        df, _ = sotr.get_matrix_points()
+                        if df.empty:
+                            st.warning("No data was extracted from the document. Please check the content and try again.")
+                        else:
+                            my_bar.progress(75, text=progress_text)
+                            st.session_state.processed_df = df
+                            my_bar.progress(100, text="Processing complete!")
+
                 if sotr_file:
                     try:
                         progress_text = "Processing SOTR document. Please wait."
@@ -97,28 +120,6 @@ def sotr_document_tab(llm_client) -> None:
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error processing file: {str(e)}")
-
-                def process_pdf():
-                    sotr = SOTRMarkdown(llm_client=llm_client)
-                    file_content = sotr_file.read()
-                    file_id = f"sotr_{sotr_file.name}"
-
-                    time_taken_to_convert_PDF_to_markdown_per_page_in_minutes = 0.5
-                    estimated_pages = len(file_content) // 10000
-                    ETA_time_in_minutes = time_taken_to_convert_PDF_to_markdown_per_page_in_minutes * estimated_pages               
-                    
-                    with st.spinner(f"This might take upto {ETA_time_in_minutes:.2f} minutes"):        
-                        my_bar.progress(15, text=progress_text)
-                        sotr.load_from_pdf(file_content, file_id)
-                        my_bar.progress(50, text=progress_text)
-                        
-                        df, _ = sotr.get_matrix_points()
-                        if df.empty:
-                            st.warning("No data was extracted from the document. Please check the content and try again.")
-                        else:
-                            my_bar.progress(75, text=progress_text)
-                            st.session_state.processed_df = df
-                            my_bar.progress(100, text="Processing complete!")
 
             sotr_dialog()
 
