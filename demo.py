@@ -365,7 +365,30 @@ def tender_qa_chat_container(llm_client, markdown_text) -> None:
                             
                             st.markdown('<p class="json-key">References:</p>', unsafe_allow_html=True)
                             for ref in message['content']["references"]:
-                                st.code(ref, language="text")
+                                st.markdown(f"""
+    <style>
+    .reference-box {{
+        background-color: #1E1E1E;
+        border: 1px solid #4682b4;
+        border-radius: 0.5rem;
+        padding: 10px;
+        margin-top: 10px;
+    }}
+    .reference-key {{
+        font-weight: bold;
+        color: #ff6c6c;
+    }}
+    .reference-value {{
+        color: #ffffff;
+    }}
+    </style>
+    <div class="reference-box">
+        <p><span class="reference-key">Page:</span> <span class="reference-value">{ref.get('page', 'N/A')}</span></p>
+        <p><span class="reference-key">Section:</span> <span class="reference-value">{ref.get('section', 'N/A')}</span></p>
+        <p><span class="reference-key">SL Number:</span> <span class="reference-value">{ref.get('sl_number', 'N/A')}</span></p>
+    </div>
+""", unsafe_allow_html=True)
+                                st.code(ref.get('reference_text', 'No reference text available'), language="text")
                             
                             st.markdown('<p class="json-key">Reasoning:</p>', unsafe_allow_html=True)
                             st.write(message['content']['reasoning'])
