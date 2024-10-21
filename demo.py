@@ -449,15 +449,34 @@ Now, provide your answer based on the given extracted text and question, ensurin
                         raise ValueError("No valid JSON object found in the response")
 
                     json_string = response[json_start:json_end+1]
+                    
+                    json_string = re.sub(r'[\x00-\x1F\x7F-\x9F]|(?<!\\)\\(?!["\\\/bfnrt])|[\ud800-\udfff]|"\s*(?:(?![\x20-\x7E]).)*\s*"',
+                                         lambda m: '' if re.match(r'[\x00-\x1F\x7F-\x9F]', m.group()) else
+                                                   '\\n' if m.group() == '\n' else
+                                                   '\\r' if m.group() == '\r' else
+                                                   '\\t' if m.group() == '\t' else
+                                                   '\\b' if m.group() == '\b' else
+                                                   '\\f' if m.group() == '\f' else
+                                                   m.group().encode('unicode_escape').decode() if re.match(r'[\ud800-\udfff]', m.group()) else
+                                                   '',
+                                         json_string)
 
                     try:
                         json_response = json.loads(json_string)
                     except json.JSONDecodeError:
-                        raise ValueError("Unable to parse the response as JSON")
+                        json_string = json_string.replace("'", '"')
+                        json_string = re.sub(r',\s*}', '}', json_string)
+                        json_string = re.sub(r',\s*]', ']', json_string)
+                        try:
+                            json_string = clean_json_string(json_string)
+                            json_response = json.loads(json_string)
+                        except json.JSONDecodeError:
+                            raise ValueError("Unable to parse JSON response after attempted fixes")
 
                     required_keys = ["answer", "references", "reasoning", "compliance_status"]
                     if not all(key in json_response for key in required_keys):
-                        raise ValueError("JSON response is missing required fields")
+                        missing_keys = [key for key in required_keys if key not in json_response]
+                        raise ValueError(f"JSON response is missing required keys: {', '.join(missing_keys)}")
 
                     st.session_state.messages.append({"role": "assistant", "content": json_response})
 
@@ -516,6 +535,24 @@ Now, provide your answer based on the given extracted text and question, ensurin
 
         spinner_placeholder.empty()
 
+def clean_json_string(json_string):
+    json_string = json_string.strip()
+
+    json_string = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', json_string)
+
+    json_string = json_string.replace("'", '"')
+
+    json_string = re.sub(r',\s*}', '}', json_string)
+    json_string = re.sub(r',\s*]', ']', json_string)
+
+    json_string = re.sub(r'(?<!\\)"(?=(?:(?:[^"]*"){2})*[^"]*$)', '\\"', json_string)
+
+    try:
+        return json.loads(json_string)
+    except json.JSONDecodeError as e:
+        print(f"JSON parsing error: {str(e)}")
+        print(f"Problematic JSON string: {json_string}")
+        raise
 
 def compliance_matrix_tab():
     st.write("<div style='text-align: center; font-size: 24px; margin-top: 100px;'>Compliance Check</div>", unsafe_allow_html=True)
